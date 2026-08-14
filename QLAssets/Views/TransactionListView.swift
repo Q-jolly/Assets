@@ -14,7 +14,8 @@ struct TransactionListView: View {
         [TransactionRecord]
 
     @Query
-    private var accounts: [Account]
+    private var accounts:
+        [Account]
 
     var body: some View {
 
@@ -27,13 +28,16 @@ struct TransactionListView: View {
                     systemImage:
                         "list.bullet.rectangle",
                     description:
-                        Text("记录第一笔消费吧")
+                        Text(
+                            "记录第一笔消费吧"
+                        )
                 )
 
             } else {
 
-                ForEach(transactions) {
-                    transaction in
+                ForEach(
+                    transactions
+                ) { transaction in
 
                     TransactionRowView(
                         transaction:
@@ -89,15 +93,18 @@ struct TransactionListView: View {
             TransactionRecord
     ) {
 
-        guard let source =
-            accounts.first(
-                where: {
-                    $0.id ==
-                        transaction
-                        .accountID
-                }
-            )
+        guard
+            let source =
+                accounts.first(
+                    where: {
+
+                        $0.id ==
+                            transaction
+                                .accountID
+                    }
+                )
         else {
+
             return
         }
 
@@ -118,16 +125,19 @@ struct TransactionListView: View {
             source.balance +=
                 transaction.amount
 
-            if let targetID =
-                transaction
-                    .targetAccountID,
-               let target =
-                accounts.first(
-                    where: {
-                        $0.id ==
-                            targetID
-                    }
-               ) {
+            if
+                let targetID =
+                    transaction
+                        .targetAccountID,
+
+                let target =
+                    accounts.first(
+                        where: {
+
+                            $0.id ==
+                                targetID
+                        }
+                    ) {
 
                 target.balance -=
                     transaction.amount
@@ -137,16 +147,21 @@ struct TransactionListView: View {
 }
 
 
+// MARK: - 账单行
+
 struct TransactionRowView: View {
 
     let transaction:
         TransactionRecord
 
-    let accountName: String
+    let accountName:
+        String
 
     var body: some View {
 
-        HStack(spacing: 12) {
+        HStack(
+            spacing: 12
+        ) {
 
             ZStack {
 
@@ -186,7 +201,8 @@ struct TransactionRowView: View {
                 )
 
                 if !transaction
-                    .note.isEmpty {
+                    .note
+                    .isEmpty {
 
                     Text(
                         transaction.note
@@ -215,7 +231,8 @@ struct TransactionRowView: View {
         String {
 
         let formatted =
-            transaction.amount
+            transaction
+                .amount
                 .formatted(
                     .currency(
                         code: "CNY"
@@ -225,12 +242,15 @@ struct TransactionRowView: View {
         switch transaction.type {
 
         case .expense:
+
             return "-\(formatted)"
 
         case .income:
+
             return "+\(formatted)"
 
         case .transfer:
+
             return formatted
         }
     }
@@ -241,12 +261,15 @@ struct TransactionRowView: View {
         switch transaction.type {
 
         case .expense:
+
             return "arrow.up.right"
 
         case .income:
+
             return "arrow.down.left"
 
         case .transfer:
+
             return "arrow.left.arrow.right"
         }
     }

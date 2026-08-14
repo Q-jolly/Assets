@@ -8,20 +8,26 @@ enum AccountType: String, CaseIterable, Identifiable {
     case alipay = "支付宝"
     case other = "其他"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var icon: String {
         switch self {
         case .cash:
-            return "banknote"
+            return "banknote.fill"
+
         case .bank:
-            return "creditcard"
+            return "creditcard.fill"
+
         case .wechat:
             return "message.fill"
+
         case .alipay:
             return "a.circle.fill"
+
         case .other:
-            return "wallet.pass"
+            return "wallet.pass.fill"
         }
     }
 }
@@ -31,15 +37,22 @@ enum TransactionType: String, CaseIterable, Identifiable {
     case income = "收入"
     case transfer = "转账"
 
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 }
 
 @Model
 final class Account {
+
     var id: UUID
+
     var name: String
+
     var typeRaw: String
+
     var balance: Double
+
     var createdAt: Date
 
     init(
@@ -61,13 +74,21 @@ final class Account {
 
 @Model
 final class TransactionRecord {
+
     var id: UUID
+
     var typeRaw: String
+
     var amount: Double
+
     var category: String
+
     var accountID: UUID
+
     var targetAccountID: UUID?
+
     var note: String
+
     var date: Date
 
     init(

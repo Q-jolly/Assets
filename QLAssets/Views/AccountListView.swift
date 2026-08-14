@@ -42,31 +42,47 @@ struct AccountListView: View {
                             height: 42
                         )
                         .background(
-                            Color(.secondarySystemBackground)
+                            Color(
+                                .secondarySystemBackground
+                            )
                         )
                         .clipShape(Circle())
 
-                        VStack(alignment: .leading) {
+                        VStack(
+                            alignment: .leading,
+                            spacing: 3
+                        ) {
 
                             Text(account.name)
                                 .font(.headline)
 
-                            Text(account.type.rawValue)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(
+                                account.type.rawValue
+                            )
+                            .font(.caption)
+                            .foregroundStyle(
+                                .secondary
+                            )
                         }
 
                         Spacer()
 
                         Text(
                             account.balance,
-                            format: .currency(code: "CNY")
+                            format: .currency(
+                                code: "CNY"
+                            )
                         )
                         .fontWeight(.semibold)
                     }
-                    .padding(.vertical, 5)
+                    .padding(
+                        .vertical,
+                        5
+                    )
                 }
-                .onDelete(perform: deleteAccounts)
+                .onDelete(
+                    perform: deleteAccounts
+                )
             }
         }
         .navigationTitle("账户")
@@ -79,13 +95,16 @@ struct AccountListView: View {
                 Button {
                     showAddAccount = true
                 } label: {
-                    Image(systemName: "plus")
+                    Image(
+                        systemName: "plus"
+                    )
                 }
             }
         }
         .sheet(
             isPresented: $showAddAccount
         ) {
+
             AddAccountView()
         }
     }
@@ -95,13 +114,18 @@ struct AccountListView: View {
     ) {
 
         for index in offsets {
-            modelContext.delete(accounts[index])
+
+            modelContext.delete(
+                accounts[index]
+            )
         }
 
         try? modelContext.save()
     }
 }
 
+
+// MARK: - 添加账户
 
 struct AddAccountView: View {
 
@@ -117,6 +141,9 @@ struct AddAccountView: View {
         AccountType = .wechat
 
     @State private var balanceText = ""
+
+    @FocusState
+    private var isBalanceFocused: Bool
 
     var body: some View {
 
@@ -142,7 +169,8 @@ struct AddAccountView: View {
 
                             Label(
                                 type.rawValue,
-                                systemImage: type.icon
+                                systemImage:
+                                    type.icon
                             )
                             .tag(type)
                         }
@@ -151,37 +179,81 @@ struct AddAccountView: View {
 
                 Section("当前余额") {
 
-                    TextField(
-                        "0.00",
-                        text: $balanceText
-                    )
-                    .keyboardType(.decimalPad)
+                    HStack {
+
+                        Text("¥")
+                            .foregroundStyle(
+                                .secondary
+                            )
+
+                        TextField(
+                            "0.00",
+                            text: $balanceText
+                        )
+                        .keyboardType(
+                            .decimalPad
+                        )
+                        .focused(
+                            $isBalanceFocused
+                        )
+                    }
                 }
             }
-            .navigationTitle("添加账户")
-            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(
+                .interactively
+            )
+            .navigationTitle(
+                "添加账户"
+            )
+            .navigationBarTitleDisplayMode(
+                .inline
+            )
             .toolbar {
 
                 ToolbarItem(
-                    placement: .cancellationAction
+                    placement:
+                        .cancellationAction
                 ) {
+
                     Button("取消") {
                         dismiss()
                     }
                 }
 
                 ToolbarItem(
-                    placement: .confirmationAction
+                    placement:
+                        .confirmationAction
                 ) {
 
                     Button("保存") {
 
+                        isBalanceFocused =
+                            false
+
                         saveAccount()
                     }
                     .disabled(
-                        name.trimmingCharacters(
-                            in: .whitespaces
-                        ).isEmpty
+                        name
+                            .trimmingCharacters(
+                                in: .whitespaces
+                            )
+                            .isEmpty
+                    )
+                }
+
+                ToolbarItemGroup(
+                    placement: .keyboard
+                ) {
+
+                    Spacer()
+
+                    Button("完成") {
+
+                        isBalanceFocused =
+                            false
+                    }
+                    .fontWeight(
+                        .semibold
                     )
                 }
             }
@@ -190,18 +262,29 @@ struct AddAccountView: View {
 
     private func saveAccount() {
 
+        let cleanedBalance =
+            balanceText
+                .replacingOccurrences(
+                    of: ",",
+                    with: "."
+                )
+
         let balance =
-            Double(balanceText) ?? 0
+            Double(cleanedBalance)
+            ?? 0
 
         let account = Account(
-            name: name.trimmingCharacters(
-                in: .whitespaces
-            ),
+            name:
+                name.trimmingCharacters(
+                    in: .whitespaces
+                ),
             type: accountType,
             balance: balance
         )
 
-        modelContext.insert(account)
+        modelContext.insert(
+            account
+        )
 
         try? modelContext.save()
 
