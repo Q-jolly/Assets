@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 
+
 struct AddTransactionView: View {
 
     @Environment(\.modelContext)
@@ -16,7 +17,8 @@ struct AddTransactionView: View {
 
     @State private var amountText = ""
 
-    @State private var category = "餐饮"
+    @State private var category =
+        "餐饮"
 
     @State private var sourceAccountID:
         UUID?
@@ -26,13 +28,19 @@ struct AddTransactionView: View {
 
     @State private var note = ""
 
-    @State private var date = Date()
+    @State private var date =
+        Date()
 
     @State private var showSavedAlert =
         false
 
+    @State private var showErrorAlert =
+        false
+
     @FocusState
-    private var isAmountFocused: Bool
+    private var isAmountFocused:
+        Bool
+
 
     private let expenseCategories = [
         "餐饮",
@@ -47,6 +55,7 @@ struct AddTransactionView: View {
         "其他"
     ]
 
+
     private let incomeCategories = [
         "工资",
         "奖金",
@@ -56,6 +65,7 @@ struct AddTransactionView: View {
         "报销",
         "其他"
     ]
+
 
     var body: some View {
 
@@ -69,17 +79,21 @@ struct AddTransactionView: View {
                 ) {
 
                     ForEach(
-                        TransactionType.allCases
+                        TransactionType
+                            .userSelectableCases
                     ) { item in
 
-                        Text(item.rawValue)
-                            .tag(item)
+                        Text(
+                            item.rawValue
+                        )
+                        .tag(item)
                     }
                 }
                 .pickerStyle(
                     .segmented
                 )
             }
+
 
             Section("金额") {
 
@@ -107,13 +121,15 @@ struct AddTransactionView: View {
                 }
             }
 
+
             if type != .transfer {
 
                 Section("分类") {
 
                     Picker(
                         "分类",
-                        selection: $category
+                        selection:
+                            $category
                     ) {
 
                         ForEach(
@@ -127,6 +143,7 @@ struct AddTransactionView: View {
                     }
                 }
             }
+
 
             Section(
                 type == .transfer
@@ -145,8 +162,9 @@ struct AddTransactionView: View {
                             UUID?.none
                         )
 
-                    ForEach(accounts) {
-                        account in
+                    ForEach(
+                        accounts
+                    ) { account in
 
                         Text(
                             "\(account.name)  ¥\(account.balance, specifier: "%.2f")"
@@ -159,6 +177,7 @@ struct AddTransactionView: View {
                     }
                 }
             }
+
 
             if type == .transfer {
 
@@ -175,8 +194,9 @@ struct AddTransactionView: View {
                                 UUID?.none
                             )
 
-                        ForEach(accounts) {
-                            account in
+                        ForEach(
+                            accounts
+                        ) { account in
 
                             Text(
                                 account.name
@@ -191,6 +211,7 @@ struct AddTransactionView: View {
                 }
             }
 
+
             Section("其他") {
 
                 DatePicker(
@@ -203,6 +224,7 @@ struct AddTransactionView: View {
                     text: $note
                 )
             }
+
 
             Section {
 
@@ -261,12 +283,16 @@ struct AddTransactionView: View {
         }
         .onChange(of: type) {
 
-            category =
-                currentCategories.first
-                ?? "其他"
+            if type != .transfer {
 
-            targetAccountID =
-                nil
+                category =
+                    currentCategories
+                        .first
+                    ?? "其他"
+
+                targetAccountID =
+                    nil
+            }
         }
         .alert(
             "记录成功",
@@ -282,7 +308,22 @@ struct AddTransactionView: View {
                 "账户余额已同步更新"
             )
         }
+        .alert(
+            "保存失败",
+            isPresented:
+                $showErrorAlert
+        ) {
+
+            Button("好的") {}
+
+        } message: {
+
+            Text(
+                "请检查账户和金额是否正确"
+            )
+        }
     }
+
 
     private var currentCategories:
         [String] {
@@ -295,10 +336,12 @@ struct AddTransactionView: View {
         case .income:
             return incomeCategories
 
-        case .transfer:
+        case .transfer,
+             .adjustment:
             return []
         }
     }
+
 
     private var amount:
         Double? {
@@ -312,6 +355,7 @@ struct AddTransactionView: View {
         )
     }
 
+
     private var canSave:
         Bool {
 
@@ -320,7 +364,6 @@ struct AddTransactionView: View {
             amount > 0,
             sourceAccountID != nil
         else {
-
             return false
         }
 
@@ -335,62 +378,22 @@ struct AddTransactionView: View {
         return true
     }
 
+
     private func saveTransaction() {
 
-        // 保存时主动关闭键盘
-        isAmountFocused = false
+        isAmountFocused =
+            false
 
         guard
             let amount,
             let sourceID =
-                sourceAccountID,
-            let source =
-                accounts.first(
-                    where: {
-                        $0.id ==
-                            sourceID
-                    }
-                )
+                sourceAccountID
         else {
-
             return
         }
 
-        switch type {
-
-        case .expense:
-
-            source.balance -= amount
-
-        case .income:
-
-            source.balance += amount
-
-        case .transfer:
-
-            guard
-                let targetID =
-                    targetAccountID,
-
-                let target =
-                    accounts.first(
-                        where: {
-                            $0.id ==
-                                targetID
-                        }
-                    )
-            else {
-
-                return
-            }
-
-            source.balance -= amount
-
-            target.balance += amount
-        }
-
-        let record =
-            TransactionRecord(
+        let success =
+            TransactionService.create(
                 type: type,
                 amount: amount,
                 category:
@@ -404,19 +407,26 @@ struct AddTransactionView: View {
                     ? targetAccountID
                     : nil,
                 note: note,
-                date: date
+                date: date,
+                accounts: accounts,
+                context:
+                    modelContext
             )
 
-        modelContext.insert(
-            record
-        )
+        if success {
 
-        try? modelContext.save()
+            resetForm()
 
-        resetForm()
+            showSavedAlert =
+                true
 
-        showSavedAlert = true
+        } else {
+
+            showErrorAlert =
+                true
+        }
     }
+
 
     private func resetForm() {
 
@@ -428,7 +438,8 @@ struct AddTransactionView: View {
 
         if type == .transfer {
 
-            targetAccountID = nil
+            targetAccountID =
+                nil
         }
     }
 }
