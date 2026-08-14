@@ -2,17 +2,35 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "wallet.pass.fill")
-                .font(.system(size: 60))
+        TabView {
 
-            Text("QL Assets")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+            NavigationStack {
+                HomeView()
+            }
+            .tabItem {
+                Label("首页", systemImage: "house.fill")
+            }
 
-            Text("iOS 环境配置成功")
-                .foregroundStyle(.secondary)
+            NavigationStack {
+                TransactionListView()
+            }
+            .tabItem {
+                Label("账单", systemImage: "list.bullet.rectangle")
+            }
+
+            NavigationStack {
+                AddTransactionView()
+            }
+            .tabItem {
+                Label("记一笔", systemImage: "plus.circle.fill")
+            }
+
+            NavigationStack {
+                AccountListView()
+            }
+            .tabItem {
+                Label("账户", systemImage: "wallet.pass.fill")
+            }
         }
-        .padding()
     }
 }

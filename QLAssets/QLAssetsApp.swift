@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct QLAssetsApp: App {
@@ -6,5 +7,9 @@ struct QLAssetsApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [
+            Account.self,
+            TransactionRecord.self
+        ])
     }
 }
