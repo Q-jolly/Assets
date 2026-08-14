@@ -10,9 +10,19 @@ targets:
     deploymentTarget: "17.0"
 
     sources:
-      - QLAssets
+      - path: QLAssets
 
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.qiaolei.qlassets
+        PRODUCT_NAME: QLAssets
+
         SWIFT_VERSION: 5.0
+
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Config/Info.plist
+
+        MARKETING_VERSION: 1.0
+        CURRENT_PROJECT_VERSION: 1
+
+        TARGETED_DEVICE_FAMILY: "1,2"
