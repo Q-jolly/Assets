@@ -365,6 +365,19 @@ struct CardWalletView: View {
 
 
 
+// MARK: - 银行卡统一尺寸
+
+private enum BankCardLayout {
+
+    // ISO/IEC 7810 ID-1：85.60 × 53.98 mm
+    static let aspectRatio:
+        CGFloat = 85.60 / 53.98
+
+    static let cornerRadius:
+        CGFloat = 24
+}
+
+
 // MARK: - 可翻转银行卡
 
 struct FlippableBankCardView: View {
@@ -384,17 +397,34 @@ struct FlippableBankCardView: View {
 
         ZStack {
 
-            if flipped {
+            cardFront
+                .opacity(
+                    flipped
+                    ? 0
+                    : 1
+                )
 
-                cardBack
 
-            } else {
-
-                cardFront
-            }
+            cardBack
+                .rotation3DEffect(
+                    .degrees(180),
+                    axis:
+                        (
+                            x: 0,
+                            y: 1,
+                            z: 0
+                        )
+                )
+                .opacity(
+                    flipped
+                    ? 1
+                    : 0
+                )
         }
-        .frame(
-            height: 215
+        .aspectRatio(
+            BankCardLayout
+                .aspectRatio,
+            contentMode: .fit
         )
         .rotation3DEffect(
             .degrees(
@@ -407,16 +437,26 @@ struct FlippableBankCardView: View {
                     x: 0,
                     y: 1,
                     z: 0
-                )
+                ),
+            perspective: 0.7
         )
         .animation(
             .spring(
-                response: 0.5,
+                response: 0.48,
                 dampingFraction:
-                    0.75
+                    0.82
             ),
             value:
                 flipped
+        )
+        .contentShape(
+            RoundedRectangle(
+                cornerRadius:
+                    BankCardLayout
+                        .cornerRadius,
+                style:
+                    .continuous
+            )
         )
         .onTapGesture {
 
@@ -523,6 +563,10 @@ struct FlippableBankCardView: View {
                     )
                 )
                 .tracking(1)
+                .minimumScaleFactor(
+                    0.78
+                )
+                .lineLimit(1)
 
 
                 Spacer()
@@ -559,19 +603,61 @@ struct FlippableBankCardView: View {
                         .font(
                             .caption.bold()
                         )
+                        .lineLimit(1)
                     }
 
 
                     Spacer()
 
 
-                    Image(
-                        systemName:
-                            "creditcard.fill"
-                    )
-                    .font(
-                        .title2
-                    )
+                    if card.cardType ==
+                        .credit {
+
+                        VStack(
+                            alignment:
+                                .trailing,
+                            spacing: 2
+                        ) {
+
+                            Text(
+                                "AVAILABLE"
+                            )
+                            .font(
+                                .system(
+                                    size: 8
+                                )
+                            )
+                            .opacity(
+                                0.6
+                            )
+
+                            if let available =
+                                card.availableCredit {
+
+                                Text(
+                                    available,
+                                    format:
+                                        .currency(
+                                            code:
+                                                "CNY"
+                                        )
+                                )
+                                .font(
+                                    .caption.bold()
+                                )
+                            }
+                        }
+
+                    } else {
+
+                        Image(
+                            systemName:
+                                "creditcard.fill"
+                        )
+                        .font(
+                            .title2
+                        )
+                    }
                 }
             }
             .foregroundStyle(
@@ -579,9 +665,15 @@ struct FlippableBankCardView: View {
             )
             .padding(22)
         }
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity
+        )
         .clipShape(
             RoundedRectangle(
-                cornerRadius: 24,
+                cornerRadius:
+                    BankCardLayout
+                        .cornerRadius,
                 style: .continuous
             )
         )
@@ -601,164 +693,287 @@ struct FlippableBankCardView: View {
     private var cardBack:
         some View {
 
-        ZStack {
+        GeometryReader {
+            geometry in
 
-            CardThemeBackground(
-                theme:
-                    card.theme
-            )
+            ZStack {
 
-
-            VStack(
-                spacing: 0
-            ) {
-
-                Spacer()
-                    .frame(
-                        height: 24
-                    )
-
-
-                Rectangle()
-                    .fill(
-                        Color.black
-                            .opacity(
-                                0.65
-                            )
-                    )
-                    .frame(
-                        height: 46
-                    )
+                CardThemeBackground(
+                    theme:
+                        card.theme
+                )
 
 
                 VStack(
-                    alignment:
-                        .leading,
-                    spacing: 18
+                    spacing: 0
                 ) {
 
-                    HStack {
-
-                        Text(
-                            "卡片信息"
+                    Spacer()
+                        .frame(
+                            height:
+                                geometry
+                                    .size
+                                    .height * 0.09
                         )
-                        .font(
-                            .headline
-                        )
-
-                        Spacer()
-
-                        Image(
-                            systemName:
-                                "lock.shield.fill"
-                        )
-                    }
 
 
-                    Divider()
-                        .overlay(
-                            Color.white
+                    Rectangle()
+                        .fill(
+                            Color.black
                                 .opacity(
-                                    0.35
+                                    0.72
                                 )
                         )
-
-
-                    HStack {
-
-                        Text(
-                            "关联账户"
-                        )
-                        .opacity(
-                            0.7
+                        .frame(
+                            height:
+                                geometry
+                                    .size
+                                    .height * 0.21
                         )
 
-                        Spacer()
 
-                        Text(
-                            account?
-                                .name
-                            ?? "未关联"
-                        )
-                        .fontWeight(
-                            .medium
-                        )
-                    }
-
-
-                    if let account {
+                    VStack(
+                        alignment:
+                            .leading,
+                        spacing: 10
+                    ) {
 
                         HStack {
 
-                            Text(
-                                "账户余额"
-                            )
-                            .opacity(
-                                0.7
-                            )
+                            VStack(
+                                alignment:
+                                    .leading,
+                                spacing: 2
+                            ) {
+
+                                Text(
+                                    "卡片信息"
+                                )
+                                .font(
+                                    .headline
+                                )
+
+                                Text(
+                                    card.cardType
+                                        .rawValue
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .opacity(
+                                    0.65
+                                )
+                            }
+
 
                             Spacer()
 
-                            Text(
-                                account.balance,
-                                format:
-                                    .currency(
-                                        code:
-                                            "CNY"
+
+                            Image(
+                                systemName:
+                                    "lock.shield.fill"
+                            )
+                        }
+
+
+                        Divider()
+                            .overlay(
+                                Color.white
+                                    .opacity(
+                                        0.28
                                     )
                             )
-                            .fontWeight(
-                                .semibold
+
+
+                        infoRow(
+                            title:
+                                "关联账户",
+                            value:
+                                account?
+                                    .name
+                                ?? "未关联"
+                        )
+
+
+                        if card.cardType ==
+                            .credit {
+
+                            infoRow(
+                                title:
+                                    "信用额度",
+                                value:
+                                    formattedCurrency(
+                                        card.creditLimit
+                                    )
+                            )
+
+
+                            infoRow(
+                                title:
+                                    "账单 / 还款",
+                                value:
+                                    creditDateText
+                            )
+
+                        } else {
+
+                            infoRow(
+                                title:
+                                    "账户余额",
+                                value:
+                                    account
+                                        .map {
+                                            $0.balance
+                                                .formatted(
+                                                    .currency(
+                                                        code:
+                                                            "CNY"
+                                                    )
+                                                )
+                                        }
+                                    ?? "--"
+                            )
+
+
+                            infoRow(
+                                title:
+                                    "卡号",
+                                value:
+                                    "•••• \(formattedLastFour)"
                             )
                         }
                     }
+                    .padding(
+                        .horizontal,
+                        22
+                    )
+                    .padding(
+                        .top,
+                        12
+                    )
+                    .padding(
+                        .bottom,
+                        14
+                    )
 
 
-                    HStack {
-
-                        Text(
-                            "卡片类型"
-                        )
-                        .opacity(
-                            0.7
-                        )
-
-                        Spacer()
-
-                        Text(
-                            card.cardType
-                                .rawValue
-                        )
-                    }
+                    Spacer(
+                        minLength: 0
+                    )
                 }
-                .padding(22)
-
-
-                Spacer()
             }
             .foregroundStyle(
                 .white
             )
+            .frame(
+                width:
+                    geometry
+                        .size
+                        .width,
+                height:
+                    geometry
+                        .size
+                        .height
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius:
+                        BankCardLayout
+                            .cornerRadius,
+                    style:
+                        .continuous
+                )
+            )
+            .shadow(
+                color:
+                    .black.opacity(
+                        0.15
+                    ),
+                radius: 14,
+                y: 8
+            )
         }
-        .scaleEffect(
-            x: -1,
-            y: 1
-        )
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius: 24,
-                style:
-                    .continuous
+    }
+
+
+    private func infoRow(
+        title: String,
+        value: String
+    ) -> some View {
+
+        HStack(
+            alignment: .firstTextBaseline,
+            spacing: 12
+        ) {
+
+            Text(title)
+                .font(
+                    .subheadline
+                )
+                .opacity(
+                    0.68
+                )
+
+
+            Spacer(
+                minLength: 8
+            )
+
+
+            Text(value)
+                .font(
+                    .subheadline
+                        .weight(
+                            .medium
+                        )
+                )
+                .multilineTextAlignment(
+                    .trailing
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(
+                    0.78
+                )
+        }
+    }
+
+
+    private func formattedCurrency(
+        _ value: Double?
+    ) -> String {
+
+        guard let value
+        else {
+            return "未设置"
+        }
+
+        return value.formatted(
+            .currency(
+                code: "CNY"
             )
         )
-        .shadow(
-            color:
-                .black.opacity(
-                    0.15
-                ),
-            radius: 14,
-            y: 8
-        )
+    }
+
+
+    private var creditDateText:
+        String {
+
+        let billing =
+            card.billingDay
+                .map {
+                    "\($0)日"
+                }
+            ?? "--"
+
+        let repayment =
+            card.repaymentDay
+                .map {
+                    "\($0)日"
+                }
+            ?? "--"
+
+        return
+            "\(billing) / \(repayment)"
     }
 
 
@@ -782,7 +997,6 @@ struct FlippableBankCardView: View {
         )
     }
 }
-
 
 
 // MARK: - 卡面背景
@@ -992,6 +1206,35 @@ struct AddCardView: View {
         CardTheme =
             .midnight
 
+    @State
+    private var creditLimitText =
+        ""
+
+    @State
+    private var currentDebtText =
+        ""
+
+    @State
+    private var billingDay =
+        1
+
+    @State
+    private var repaymentDay =
+        20
+
+    @FocusState
+    private var focusedField:
+        CardNumberField?
+
+
+    private enum CardNumberField:
+        Hashable {
+
+        case lastFour
+        case creditLimit
+        case currentDebt
+    }
+
 
     var body: some View {
 
@@ -1040,6 +1283,11 @@ struct AddCardView: View {
                     .keyboardType(
                         .numberPad
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .lastFour
+                    )
                     .onChange(
                         of:
                             lastFourDigits
@@ -1057,6 +1305,13 @@ struct AddCardView: View {
                         text:
                             $holderName
                     )
+                }
+
+
+                if cardType ==
+                    .credit {
+
+                    creditCardSection
                 }
 
 
@@ -1151,13 +1406,176 @@ struct AddCardView: View {
                         "保存"
                     ) {
 
+                        focusedField =
+                            nil
+
                         saveCard()
                     }
                     .disabled(
                         !canSave
                     )
                 }
+
+
+                ToolbarItemGroup(
+                    placement:
+                        .keyboard
+                ) {
+
+                    Spacer()
+
+                    Button(
+                        "完成"
+                    ) {
+
+                        focusedField =
+                            nil
+                    }
+                    .fontWeight(
+                        .semibold
+                    )
+                }
             }
+            .onChange(
+                of: cardType
+            ) {
+
+                if cardType ==
+                    .debit {
+
+                    creditLimitText =
+                        ""
+
+                    currentDebtText =
+                        ""
+                }
+            }
+        }
+    }
+
+
+    private var creditCardSection:
+        some View {
+
+        Section {
+
+            HStack {
+
+                Text(
+                    "信用额度"
+                )
+
+                Spacer()
+
+                Text("¥")
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                TextField(
+                    "0.00",
+                    text:
+                        $creditLimitText
+                )
+                .keyboardType(
+                    .decimalPad
+                )
+                .multilineTextAlignment(
+                    .trailing
+                )
+                .focused(
+                    $focusedField,
+                    equals:
+                        .creditLimit
+                )
+                .frame(
+                    maxWidth: 130
+                )
+            }
+
+
+            HStack {
+
+                Text(
+                    "当前欠款"
+                )
+
+                Spacer()
+
+                Text("¥")
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                TextField(
+                    "0.00",
+                    text:
+                        $currentDebtText
+                )
+                .keyboardType(
+                    .decimalPad
+                )
+                .multilineTextAlignment(
+                    .trailing
+                )
+                .focused(
+                    $focusedField,
+                    equals:
+                        .currentDebt
+                )
+                .frame(
+                    maxWidth: 130
+                )
+            }
+
+
+            Picker(
+                "账单日",
+                selection:
+                    $billingDay
+            ) {
+
+                ForEach(
+                    1...31,
+                    id: \.self
+                ) { day in
+
+                    Text(
+                        "每月 \(day) 日"
+                    )
+                    .tag(day)
+                }
+            }
+
+
+            Picker(
+                "还款日",
+                selection:
+                    $repaymentDay
+            ) {
+
+                ForEach(
+                    1...31,
+                    id: \.self
+                ) { day in
+
+                    Text(
+                        "每月 \(day) 日"
+                    )
+                    .tag(day)
+                }
+            }
+        } header: {
+
+            Text(
+                "信用卡信息"
+            )
+
+        } footer: {
+
+            Text(
+                "当前版本先记录额度、欠款与日期；V0.3 会把信用卡欠款正式纳入总负债和净资产计算。"
+            )
         }
     }
 
@@ -1200,15 +1618,45 @@ struct AddCardView: View {
     private var canSave:
         Bool {
 
-        !bankName
-            .trimmingCharacters(
-                in:
-                    .whitespacesAndNewlines
-            )
-            .isEmpty
-        &&
-        lastFourDigits.count ==
-            4
+        let basicValid =
+            !bankName
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+                .isEmpty
+            &&
+            lastFourDigits.count ==
+                4
+
+        if cardType ==
+            .credit {
+
+            guard basicValid
+            else {
+                return false
+            }
+
+            if let limit =
+                parsedAmount(
+                    creditLimitText
+                ),
+               limit < 0 {
+
+                return false
+            }
+
+            if let debt =
+                parsedAmount(
+                    currentDebtText
+                ),
+               debt < 0 {
+
+                return false
+            }
+        }
+
+        return basicValid
     }
 
 
@@ -1247,6 +1695,26 @@ struct AddCardView: View {
                     linkedAccountID,
                 theme:
                     theme,
+                creditLimit:
+                    cardType == .credit
+                    ? parsedAmount(
+                        creditLimitText
+                    )
+                    : nil,
+                currentDebt:
+                    cardType == .credit
+                    ? parsedAmount(
+                        currentDebtText
+                    )
+                    : nil,
+                billingDay:
+                    cardType == .credit
+                    ? billingDay
+                    : nil,
+                repaymentDay:
+                    cardType == .credit
+                    ? repaymentDay
+                    : nil,
                 sortOrder:
                     nextOrder
             )
@@ -1263,6 +1731,31 @@ struct AddCardView: View {
     }
 
 
+    private func parsedAmount(
+        _ value: String
+    ) -> Double? {
+
+        let cleaned =
+            value
+                .replacingOccurrences(
+                    of: ",",
+                    with: "."
+                )
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+
+        if cleaned.isEmpty {
+            return nil
+        }
+
+        return Double(
+            cleaned
+        )
+    }
+
+
     private func sanitizeLastFour(
         _ value: String
     ) -> String {
@@ -1276,7 +1769,6 @@ struct AddCardView: View {
         )
     }
 }
-
 
 
 // MARK: - 新增页面卡片预览
@@ -1395,12 +1887,17 @@ struct BankCardPreview: View {
             )
             .padding(22)
         }
-        .frame(
-            height: 190
+        .aspectRatio(
+            BankCardLayout
+                .aspectRatio,
+            contentMode: .fit
         )
         .clipShape(
             RoundedRectangle(
-                cornerRadius: 22
+                cornerRadius:
+                    BankCardLayout
+                        .cornerRadius,
+                style: .continuous
             )
         )
         .padding(
@@ -1522,6 +2019,72 @@ struct CardDetailView: View {
                         card.theme
                             .rawValue
                 )
+            }
+
+
+            if card.cardType ==
+                .credit {
+
+                Section(
+                    "信用卡"
+                ) {
+
+                    LabeledContent(
+                        "信用额度"
+                    ) {
+
+                        Text(
+                            formattedCurrency(
+                                card.creditLimit
+                            )
+                        )
+                    }
+
+
+                    LabeledContent(
+                        "当前欠款"
+                    ) {
+
+                        Text(
+                            formattedCurrency(
+                                card.currentDebt
+                            )
+                        )
+                        .fontWeight(
+                            .semibold
+                        )
+                    }
+
+
+                    LabeledContent(
+                        "可用额度"
+                    ) {
+
+                        Text(
+                            formattedCurrency(
+                                card.availableCredit
+                            )
+                        )
+                    }
+
+
+                    LabeledContent(
+                        "账单日",
+                        value:
+                            dayText(
+                                card.billingDay
+                            )
+                    )
+
+
+                    LabeledContent(
+                        "还款日",
+                        value:
+                            dayText(
+                                card.repaymentDay
+                            )
+                    )
+                }
             }
 
 
@@ -1673,8 +2236,37 @@ struct CardDetailView: View {
                 accountID
         }
     }
-}
 
+
+    private func formattedCurrency(
+        _ value: Double?
+    ) -> String {
+
+        guard let value
+        else {
+            return "未设置"
+        }
+
+        return value.formatted(
+            .currency(
+                code: "CNY"
+            )
+        )
+    }
+
+
+    private func dayText(
+        _ day: Int?
+    ) -> String {
+
+        guard let day
+        else {
+            return "未设置"
+        }
+
+        return "每月 \(day) 日"
+    }
+}
 
 
 // MARK: - 编辑银行卡
@@ -1721,6 +2313,35 @@ struct EditCardView: View {
     private var theme:
         CardTheme
 
+    @State
+    private var creditLimitText:
+        String
+
+    @State
+    private var currentDebtText:
+        String
+
+    @State
+    private var billingDay:
+        Int
+
+    @State
+    private var repaymentDay:
+        Int
+
+    @FocusState
+    private var focusedField:
+        EditCardNumberField?
+
+
+    private enum EditCardNumberField:
+        Hashable {
+
+        case lastFour
+        case creditLimit
+        case currentDebt
+    }
+
 
     init(
         card: BankCard
@@ -1763,6 +2384,48 @@ struct EditCardView: View {
             State(
                 initialValue:
                     card.theme
+            )
+
+        _creditLimitText =
+            State(
+                initialValue:
+                    card.creditLimit
+                        .map {
+                            String(
+                                format:
+                                    "%.2f",
+                                $0
+                            )
+                        }
+                    ?? ""
+            )
+
+        _currentDebtText =
+            State(
+                initialValue:
+                    card.currentDebt
+                        .map {
+                            String(
+                                format:
+                                    "%.2f",
+                                $0
+                            )
+                        }
+                    ?? ""
+            )
+
+        _billingDay =
+            State(
+                initialValue:
+                    card.billingDay
+                    ?? 1
+            )
+
+        _repaymentDay =
+            State(
+                initialValue:
+                    card.repaymentDay
+                    ?? 20
             )
     }
 
@@ -1838,6 +2501,11 @@ struct EditCardView: View {
                     .keyboardType(
                         .numberPad
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .lastFour
+                    )
                     .onChange(
                         of:
                             lastFourDigits
@@ -1859,6 +2527,13 @@ struct EditCardView: View {
                         text:
                             $holderName
                     )
+                }
+
+
+                if cardType ==
+                    .credit {
+
+                    creditCardSection
                 }
 
 
@@ -1953,23 +2628,183 @@ struct EditCardView: View {
                         "保存"
                     ) {
 
+                        focusedField =
+                            nil
+
                         save()
                     }
                     .disabled(
-                        bankName
-                            .trimmingCharacters(
-                                in:
-                                    .whitespacesAndNewlines
-                            )
-                            .isEmpty
-                        ||
-                        lastFourDigits
-                            .count !=
-                            4
+                        !canSave
+                    )
+                }
+
+
+                ToolbarItemGroup(
+                    placement:
+                        .keyboard
+                ) {
+
+                    Spacer()
+
+                    Button(
+                        "完成"
+                    ) {
+
+                        focusedField =
+                            nil
+                    }
+                    .fontWeight(
+                        .semibold
                     )
                 }
             }
+            .onChange(
+                of: cardType
+            ) {
+
+                if cardType ==
+                    .debit {
+
+                    creditLimitText =
+                        ""
+
+                    currentDebtText =
+                        ""
+                }
+            }
         }
+    }
+
+
+    private var creditCardSection:
+        some View {
+
+        Section(
+            "信用卡信息"
+        ) {
+
+            HStack {
+
+                Text(
+                    "信用额度"
+                )
+
+                Spacer()
+
+                Text("¥")
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                TextField(
+                    "0.00",
+                    text:
+                        $creditLimitText
+                )
+                .keyboardType(
+                    .decimalPad
+                )
+                .multilineTextAlignment(
+                    .trailing
+                )
+                .focused(
+                    $focusedField,
+                    equals:
+                        .creditLimit
+                )
+                .frame(
+                    maxWidth: 130
+                )
+            }
+
+
+            HStack {
+
+                Text(
+                    "当前欠款"
+                )
+
+                Spacer()
+
+                Text("¥")
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                TextField(
+                    "0.00",
+                    text:
+                        $currentDebtText
+                )
+                .keyboardType(
+                    .decimalPad
+                )
+                .multilineTextAlignment(
+                    .trailing
+                )
+                .focused(
+                    $focusedField,
+                    equals:
+                        .currentDebt
+                )
+                .frame(
+                    maxWidth: 130
+                )
+            }
+
+
+            Picker(
+                "账单日",
+                selection:
+                    $billingDay
+            ) {
+
+                ForEach(
+                    1...31,
+                    id: \.self
+                ) { day in
+
+                    Text(
+                        "每月 \(day) 日"
+                    )
+                    .tag(day)
+                }
+            }
+
+
+            Picker(
+                "还款日",
+                selection:
+                    $repaymentDay
+            ) {
+
+                ForEach(
+                    1...31,
+                    id: \.self
+                ) { day in
+
+                    Text(
+                        "每月 \(day) 日"
+                    )
+                    .tag(day)
+                }
+            }
+        }
+    }
+
+
+    private var canSave:
+        Bool {
+
+        !bankName
+            .trimmingCharacters(
+                in:
+                    .whitespacesAndNewlines
+            )
+            .isEmpty
+        &&
+        lastFourDigits.count ==
+            4
     }
 
 
@@ -2001,13 +2836,72 @@ struct EditCardView: View {
         card.themeRaw =
             theme.rawValue
 
+
+        if cardType ==
+            .credit {
+
+            card.creditLimit =
+                parsedAmount(
+                    creditLimitText
+                )
+
+            card.currentDebt =
+                parsedAmount(
+                    currentDebtText
+                )
+
+            card.billingDay =
+                billingDay
+
+            card.repaymentDay =
+                repaymentDay
+
+        } else {
+
+            card.creditLimit =
+                nil
+
+            card.currentDebt =
+                nil
+
+            card.billingDay =
+                nil
+
+            card.repaymentDay =
+                nil
+        }
+
         try?
             modelContext.save()
 
         dismiss()
     }
-}
 
+
+    private func parsedAmount(
+        _ value: String
+    ) -> Double? {
+
+        let cleaned =
+            value
+                .replacingOccurrences(
+                    of: ",",
+                    with: "."
+                )
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+
+        if cleaned.isEmpty {
+            return nil
+        }
+
+        return Double(
+            cleaned
+        )
+    }
+}
 
 
 // MARK: - 卡片管理 / 排序

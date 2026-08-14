@@ -295,6 +295,21 @@ final class BankCard {
     var themeRaw: String
 
     /*
+     信用卡扩展信息。
+     储蓄卡保持 nil。
+
+     目前先作为卡片管理数据使用，
+     V0.3 再与“负债 / 净资产”正式联动。
+     */
+    var creditLimit: Double?
+
+    var currentDebt: Double?
+
+    var billingDay: Int?
+
+    var repaymentDay: Int?
+
+    /*
      排序用。
      */
     var sortOrder: Int
@@ -308,6 +323,10 @@ final class BankCard {
         holderName: String,
         accountID: UUID? = nil,
         theme: CardTheme = .midnight,
+        creditLimit: Double? = nil,
+        currentDebt: Double? = nil,
+        billingDay: Int? = nil,
+        repaymentDay: Int? = nil,
         sortOrder: Int = 0
     ) {
 
@@ -332,6 +351,35 @@ final class BankCard {
         self.themeRaw =
             theme.rawValue
 
+        if cardType == .credit {
+
+            self.creditLimit =
+                creditLimit
+
+            self.currentDebt =
+                currentDebt
+
+            self.billingDay =
+                billingDay
+
+            self.repaymentDay =
+                repaymentDay
+
+        } else {
+
+            self.creditLimit =
+                nil
+
+            self.currentDebt =
+                nil
+
+            self.billingDay =
+                nil
+
+            self.repaymentDay =
+                nil
+        }
+
         self.sortOrder =
             sortOrder
 
@@ -355,5 +403,21 @@ final class BankCard {
             rawValue:
                 themeRaw
         ) ?? .midnight
+    }
+
+
+    var availableCredit: Double? {
+
+        guard
+            cardType == .credit,
+            let creditLimit
+        else {
+            return nil
+        }
+
+        return max(
+            creditLimit - (currentDebt ?? 0),
+            0
+        )
     }
 }
