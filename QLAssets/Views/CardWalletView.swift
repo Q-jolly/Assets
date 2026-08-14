@@ -124,28 +124,33 @@ struct CardWalletView: View {
     private var emptyState:
         some View {
 
-        ContentUnavailableView(
-            "还没有银行卡",
-            systemImage:
-                "creditcard",
-            description:
-                Text(
-                    "添加你的第一张储蓄卡或信用卡"
-                ),
-            actions: {
+        ContentUnavailableView {
 
-                Button(
-                    "添加银行卡"
-                ) {
+            Label(
+                "还没有银行卡",
+                systemImage:
+                    "creditcard"
+            )
 
-                    showAddCard =
-                        true
-                }
-                .buttonStyle(
-                    .borderedProminent
-                )
+        } description: {
+
+            Text(
+                "添加你的第一张储蓄卡或信用卡"
+            )
+
+        } actions: {
+
+            Button(
+                "添加银行卡"
+            ) {
+
+                showAddCard =
+                    true
             }
-        )
+            .buttonStyle(
+                .borderedProminent
+            )
+        }
         .frame(
             minHeight: 500
         )
