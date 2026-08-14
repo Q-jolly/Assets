@@ -1,1 +1,18 @@
+name: QLAssets
 
+options:
+  bundleIdPrefix: com.qiaolei
+
+targets:
+  QLAssets:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+
+    sources:
+      - QLAssets
+
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.qiaolei.qlassets
+        SWIFT_VERSION: 5.0
