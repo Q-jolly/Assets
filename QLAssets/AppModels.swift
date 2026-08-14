@@ -1,7 +1,14 @@
 import Foundation
 import SwiftData
 
-enum AccountType: String, CaseIterable, Identifiable {
+
+// MARK: - 账户类型
+
+enum AccountType:
+    String,
+    CaseIterable,
+    Identifiable {
+
     case cash = "现金"
     case bank = "银行卡"
     case wechat = "微信"
@@ -13,7 +20,9 @@ enum AccountType: String, CaseIterable, Identifiable {
     }
 
     var icon: String {
+
         switch self {
+
         case .cash:
             return "banknote.fill"
 
@@ -33,7 +42,13 @@ enum AccountType: String, CaseIterable, Identifiable {
 }
 
 
-enum TransactionType: String, CaseIterable, Identifiable {
+// MARK: - 流水类型
+
+enum TransactionType:
+    String,
+    CaseIterable,
+    Identifiable {
+
     case expense = "支出"
     case income = "收入"
     case transfer = "转账"
@@ -45,7 +60,9 @@ enum TransactionType: String, CaseIterable, Identifiable {
         rawValue
     }
 
-    static var userSelectableCases: [TransactionType] {
+    static var userSelectableCases:
+        [TransactionType] {
+
         [
             .expense,
             .income,
@@ -54,7 +71,9 @@ enum TransactionType: String, CaseIterable, Identifiable {
     }
 
     var icon: String {
+
         switch self {
+
         case .expense:
             return "arrow.up.right"
 
@@ -70,6 +89,56 @@ enum TransactionType: String, CaseIterable, Identifiable {
     }
 }
 
+
+// MARK: - 卡片类型
+
+enum BankCardType:
+    String,
+    CaseIterable,
+    Identifiable {
+
+    case debit = "储蓄卡"
+    case credit = "信用卡"
+
+    var id: String {
+        rawValue
+    }
+
+    var icon: String {
+
+        switch self {
+
+        case .debit:
+            return "creditcard"
+
+        case .credit:
+            return "creditcard.fill"
+        }
+    }
+}
+
+
+// MARK: - 卡面主题
+
+enum CardTheme:
+    String,
+    CaseIterable,
+    Identifiable {
+
+    case midnight = "曜石黑"
+    case ocean = "深海蓝"
+    case forest = "森林绿"
+    case violet = "星云紫"
+    case graphite = "石墨灰"
+    case sunrise = "晨曦橙"
+
+    var id: String {
+        rawValue
+    }
+}
+
+
+// MARK: - Account
 
 @Model
 final class Account {
@@ -89,20 +158,32 @@ final class Account {
         type: AccountType,
         balance: Double = 0
     ) {
+
         self.id = UUID()
+
         self.name = name
-        self.typeRaw = type.rawValue
-        self.balance = balance
-        self.createdAt = Date()
+
+        self.typeRaw =
+            type.rawValue
+
+        self.balance =
+            balance
+
+        self.createdAt =
+            Date()
     }
 
     var type: AccountType {
+
         AccountType(
-            rawValue: typeRaw
+            rawValue:
+                typeRaw
         ) ?? .other
     }
 }
 
+
+// MARK: - Transaction
 
 @Model
 final class TransactionRecord {
@@ -116,7 +197,7 @@ final class TransactionRecord {
      amount 永远为正数
 
      余额调整：
-     amount 可以为正或负
+     amount 可以为正数或负数
      */
     var amount: Double
 
@@ -139,25 +220,140 @@ final class TransactionRecord {
         note: String = "",
         date: Date = Date()
     ) {
+
         self.id = UUID()
-        self.typeRaw = type.rawValue
+
+        self.typeRaw =
+            type.rawValue
 
         if type == .adjustment {
-            self.amount = amount
+
+            self.amount =
+                amount
+
         } else {
-            self.amount = abs(amount)
+
+            self.amount =
+                abs(amount)
         }
 
-        self.category = category
-        self.accountID = accountID
-        self.targetAccountID = targetAccountID
-        self.note = note
-        self.date = date
+        self.category =
+            category
+
+        self.accountID =
+            accountID
+
+        self.targetAccountID =
+            targetAccountID
+
+        self.note =
+            note
+
+        self.date =
+            date
     }
 
     var type: TransactionType {
+
         TransactionType(
-            rawValue: typeRaw
+            rawValue:
+                typeRaw
         ) ?? .expense
+    }
+}
+
+
+// MARK: - BankCard
+
+@Model
+final class BankCard {
+
+    var id: UUID
+
+    var bankName: String
+
+    var cardTypeRaw: String
+
+    /*
+     当前阶段不保存完整银行卡号，
+     只保存后四位。
+     */
+    var lastFourDigits: String
+
+    var holderName: String
+
+    /*
+     可选关联 Account。
+     例如：
+
+     工商银行卡卡片
+          ↓
+     工商银行资产账户
+     */
+    var accountID: UUID?
+
+    var themeRaw: String
+
+    /*
+     排序用。
+     */
+    var sortOrder: Int
+
+    var createdAt: Date
+
+    init(
+        bankName: String,
+        cardType: BankCardType,
+        lastFourDigits: String,
+        holderName: String,
+        accountID: UUID? = nil,
+        theme: CardTheme = .midnight,
+        sortOrder: Int = 0
+    ) {
+
+        self.id =
+            UUID()
+
+        self.bankName =
+            bankName
+
+        self.cardTypeRaw =
+            cardType.rawValue
+
+        self.lastFourDigits =
+            lastFourDigits
+
+        self.holderName =
+            holderName
+
+        self.accountID =
+            accountID
+
+        self.themeRaw =
+            theme.rawValue
+
+        self.sortOrder =
+            sortOrder
+
+        self.createdAt =
+            Date()
+    }
+
+
+    var cardType: BankCardType {
+
+        BankCardType(
+            rawValue:
+                cardTypeRaw
+        ) ?? .debit
+    }
+
+
+    var theme: CardTheme {
+
+        CardTheme(
+            rawValue:
+                themeRaw
+        ) ?? .midnight
     }
 }

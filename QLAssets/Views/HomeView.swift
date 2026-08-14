@@ -14,11 +14,16 @@ struct HomeView: View {
     )
     private var transactions: [TransactionRecord]
 
+
+    // MARK: - 统计
+
     private var totalAssets: Double {
+
         accounts.reduce(0) {
             $0 + $1.balance
         }
     }
+
 
     private var monthlyExpense: Double {
 
@@ -26,6 +31,7 @@ struct HomeView: View {
             .filter {
 
                 $0.type == .expense &&
+
                 Calendar.current.isDate(
                     $0.date,
                     equalTo: Date(),
@@ -33,9 +39,10 @@ struct HomeView: View {
                 )
             }
             .reduce(0) {
-                $0 + $1.amount
+                $0 + abs($1.amount)
             }
     }
+
 
     private var monthlyIncome: Double {
 
@@ -43,6 +50,7 @@ struct HomeView: View {
             .filter {
 
                 $0.type == .income &&
+
                 Calendar.current.isDate(
                     $0.date,
                     equalTo: Date(),
@@ -50,9 +58,10 @@ struct HomeView: View {
                 )
             }
             .reduce(0) {
-                $0 + $1.amount
+                $0 + abs($1.amount)
             }
     }
+
 
     var body: some View {
 
@@ -84,6 +93,9 @@ struct HomeView: View {
         }
         .navigationTitle("QL Assets")
     }
+
+
+    // MARK: - 净资产卡片
 
     private var netAssetCard: some View {
 
@@ -123,6 +135,9 @@ struct HomeView: View {
         )
     }
 
+
+    // MARK: - 月度卡片
+
     private func summaryCard(
         title: String,
         value: Double
@@ -158,6 +173,9 @@ struct HomeView: View {
         )
     }
 
+
+    // MARK: - 最近账单
+
     private var recentTransactions: some View {
 
         VStack(
@@ -167,6 +185,7 @@ struct HomeView: View {
 
             Text("最近账单")
                 .font(.title3.bold())
+
 
             if transactions.isEmpty {
 
@@ -181,18 +200,46 @@ struct HomeView: View {
             } else {
 
                 ForEach(
-                    Array(transactions.prefix(5))
+                    Array(
+                        transactions.prefix(5)
+                    )
                 ) { transaction in
 
-                    TransactionRowView(
-                        transaction: transaction,
-                        accountName: accountName(
-                            transaction.accountID
+                    NavigationLink {
+
+                        TransactionDetailView(
+                            transaction: transaction
                         )
-                    )
+
+                    } label: {
+
+                        TransactionRowView(
+                            transaction: transaction,
+
+                            accountName:
+                                accountName(
+                                    transaction.accountID
+                                ),
+
+                            targetAccountName:
+                                transaction
+                                    .targetAccountID
+                                    .flatMap {
+                                        accountName($0)
+                                    }
+                        )
+                        .contentShape(
+                            Rectangle()
+                        )
+                    }
+                    .buttonStyle(.plain)
+
 
                     if transaction.id !=
-                        transactions.prefix(5).last?.id {
+                        transactions
+                            .prefix(5)
+                            .last?
+                            .id {
 
                         Divider()
                     }
@@ -205,12 +252,18 @@ struct HomeView: View {
         )
     }
 
+
+    // MARK: - 账户名称
+
     private func accountName(
         _ id: UUID
     ) -> String {
 
         accounts.first {
+
             $0.id == id
-        }?.name ?? "未知账户"
+
+        }?.name
+        ?? "未知账户"
     }
 }
