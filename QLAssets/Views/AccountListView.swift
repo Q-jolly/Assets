@@ -265,6 +265,12 @@ struct AccountDetailView: View {
     private var transactions:
         [TransactionRecord]
 
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
+
     @State
     private var showEditAccount =
         false
@@ -439,6 +445,14 @@ struct AccountDetailView: View {
                                             accountName(
                                                 $0
                                             )
+                                        },
+                                cardName:
+                                    transaction
+                                        .bankCardID
+                                        .flatMap {
+                                            cardName(
+                                                $0
+                                            )
                                         }
                             )
                         }
@@ -485,6 +499,19 @@ struct AccountDetailView: View {
 
         }?.name
         ?? "未知账户"
+    }
+
+
+    private func cardName(
+        _ id: UUID
+    ) -> String? {
+
+        cards.first {
+            $0.id == id
+        }
+        .map {
+            "\($0.bankName) •••• \($0.lastFourDigits)"
+        }
     }
 }
 

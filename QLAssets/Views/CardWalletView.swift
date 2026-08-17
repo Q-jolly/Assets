@@ -2218,7 +2218,7 @@ struct AddCardView: View {
         } footer: {
 
             Text(
-                "当前版本先记录额度、欠款与日期；V0.3 会把信用卡欠款正式纳入总负债和净资产计算。"
+                "信用卡消费和还款会自动联动欠款，并同步计入总负债和净资产。"
             )
         }
     }
@@ -2584,12 +2584,23 @@ struct CardDetailView: View {
     private var accounts:
         [Account]
 
+    @Query(
+        sort: \TransactionRecord.date,
+        order: .reverse
+    )
+    private var transactions:
+        [TransactionRecord]
+
     @State
     private var showEdit =
         false
 
     @State
     private var showDelete =
+        false
+
+    @State
+    private var showDeleteBlocked =
         false
 
 
@@ -2797,8 +2808,16 @@ struct CardDetailView: View {
                         .destructive
                 ) {
 
-                    showDelete =
-                        true
+                    if hasTransactions {
+
+                        showDeleteBlocked =
+                            true
+
+                    } else {
+
+                        showDelete =
+                            true
+                    }
 
                 } label: {
 
@@ -2858,8 +2877,32 @@ struct CardDetailView: View {
         } message: {
 
             Text(
-                "只会删除卡包里的卡片，不会删除关联的资产账户和历史账单。"
+                "只会删除卡包里的卡片，不会删除关联的资产账户。"
             )
+        }
+        .alert(
+            "暂时不能删除",
+            isPresented:
+                $showDeleteBlocked
+        ) {
+
+            Button("好的") {}
+
+        } message: {
+
+            Text(
+                "这张信用卡已经存在消费或还款记录。请先保留卡片，以免历史账单失去关联。"
+            )
+        }
+    }
+
+
+    private var hasTransactions:
+        Bool {
+
+        transactions.contains {
+            $0.bankCardID ==
+                card.id
         }
     }
 

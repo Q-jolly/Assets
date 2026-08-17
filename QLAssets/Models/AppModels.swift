@@ -52,6 +52,8 @@ enum TransactionType:
     case expense = "支出"
     case income = "收入"
     case transfer = "转账"
+    case creditExpense = "信用卡消费"
+    case creditRepayment = "信用卡还款"
 
     // 系统内部使用
     case adjustment = "余额调整"
@@ -66,7 +68,9 @@ enum TransactionType:
         [
             .expense,
             .income,
-            .transfer
+            .transfer,
+            .creditExpense,
+            .creditRepayment
         ]
     }
 
@@ -82,6 +86,12 @@ enum TransactionType:
 
         case .transfer:
             return "arrow.left.arrow.right"
+
+        case .creditExpense:
+            return "creditcard.fill"
+
+        case .creditRepayment:
+            return "arrow.down.to.line.compact"
 
         case .adjustment:
             return "arrow.triangle.2.circlepath"
@@ -207,6 +217,12 @@ final class TransactionRecord {
 
     var targetAccountID: UUID?
 
+    /*
+     信用卡消费 / 还款关联的 BankCard。
+     普通账单保持 nil。
+     */
+    var bankCardID: UUID?
+
     var note: String
 
     var date: Date
@@ -217,6 +233,7 @@ final class TransactionRecord {
         category: String,
         accountID: UUID,
         targetAccountID: UUID? = nil,
+        bankCardID: UUID? = nil,
         note: String = "",
         date: Date = Date()
     ) {
@@ -245,6 +262,9 @@ final class TransactionRecord {
 
         self.targetAccountID =
             targetAccountID
+
+        self.bankCardID =
+            bankCardID
 
         self.note =
             note

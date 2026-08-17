@@ -1,23 +1,33 @@
 import SwiftUI
 import SwiftData
 
+
 struct HomeView: View {
 
     @Query(
         sort: \Account.createdAt
     )
-    private var accounts: [Account]
+    private var accounts:
+        [Account]
+
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
 
     @Query(
         sort: \TransactionRecord.date,
         order: .reverse
     )
-    private var transactions: [TransactionRecord]
+    private var transactions:
+        [TransactionRecord]
 
 
-    // MARK: - 统计
+    // MARK: - 资产统计
 
-    private var totalAssets: Double {
+    private var totalAssets:
+        Double {
 
         accounts.reduce(0) {
             $0 + $1.balance
@@ -25,17 +35,49 @@ struct HomeView: View {
     }
 
 
-    private var monthlyExpense: Double {
+    private var totalDebt:
+        Double {
+
+        creditCards.reduce(0) {
+            $0 + max(
+                $1.currentDebt ?? 0,
+                0
+            )
+        }
+    }
+
+
+    private var netAssets:
+        Double {
+
+        totalAssets -
+        totalDebt
+    }
+
+
+    private var creditCards:
+        [BankCard] {
+
+        cards.filter {
+            $0.cardType == .credit
+        }
+    }
+
+
+    private var monthlyExpense:
+        Double {
 
         transactions
             .filter {
 
-                $0.type == .expense &&
+                ($0.type == .expense ||
+                 $0.type == .creditExpense) &&
 
                 AppTime.calendar.isDate(
                     $0.date,
                     equalTo: Date(),
-                    toGranularity: .month
+                    toGranularity:
+                        .month
                 )
             }
             .reduce(0) {
@@ -44,7 +86,8 @@ struct HomeView: View {
     }
 
 
-    private var monthlyIncome: Double {
+    private var monthlyIncome:
+        Double {
 
         transactions
             .filter {
@@ -54,7 +97,8 @@ struct HomeView: View {
                 AppTime.calendar.isDate(
                     $0.date,
                     equalTo: Date(),
-                    toGranularity: .month
+                    toGranularity:
+                        .month
                 )
             }
             .reduce(0) {
@@ -74,51 +118,105 @@ struct HomeView: View {
 
                 netAssetCard
 
-                HStack(spacing: 12) {
+                HStack(
+                    spacing: 12
+                ) {
 
                     summaryCard(
-                        title: "本月支出",
-                        value: monthlyExpense
+                        title:
+                            "本月支出",
+                        value:
+                            monthlyExpense
                     )
 
                     summaryCard(
-                        title: "本月收入",
-                        value: monthlyIncome
+                        title:
+                            "本月收入",
+                        value:
+                            monthlyIncome
                     )
+                }
+
+                if !creditCards.isEmpty {
+
+                    creditCardDebtSection
                 }
 
                 recentTransactions
             }
             .padding()
         }
-        .navigationTitle("QL Assets")
+        .navigationTitle(
+            "QL Assets"
+        )
     }
 
 
     // MARK: - 净资产卡片
 
-    private var netAssetCard: some View {
+    private var netAssetCard:
+        some View {
 
         VStack(
             alignment: .leading,
-            spacing: 10
+            spacing: 18
         ) {
 
-            Text("净资产")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            VStack(
+                alignment: .leading,
+                spacing: 8
+            ) {
 
-            Text(
-                totalAssets,
-                format: .currency(code: "CNY")
-            )
-            .font(
-                .system(
-                    size: 36,
-                    weight: .bold,
-                    design: .rounded
+                Text("净资产")
+                    .font(
+                        .subheadline
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                Text(
+                    netAssets,
+                    format:
+                        .currency(
+                            code: "CNY"
+                        )
                 )
-            )
+                .font(
+                    .system(
+                        size: 36,
+                        weight: .bold,
+                        design: .rounded
+                    )
+                )
+            }
+
+
+            Divider()
+
+
+            HStack(
+                spacing: 24
+            ) {
+
+                assetMetric(
+                    title:
+                        "总资产",
+                    value:
+                        totalAssets,
+                    icon:
+                        "wallet.pass.fill"
+                )
+
+                assetMetric(
+                    title:
+                        "总负债",
+                    value:
+                        totalDebt,
+                    icon:
+                        "creditcard.fill"
+                )
+            }
         }
         .frame(
             maxWidth: .infinity,
@@ -126,12 +224,70 @@ struct HomeView: View {
         )
         .padding()
         .background(
-            Color(.secondarySystemBackground)
+            Color(
+                .secondarySystemBackground
+            )
         )
         .clipShape(
             RoundedRectangle(
-                cornerRadius: 20
+                cornerRadius: 20,
+                style: .continuous
             )
+        )
+    }
+
+
+    private func assetMetric(
+        title: String,
+        value: Double,
+        icon: String
+    ) -> some View {
+
+        HStack(
+            spacing: 10
+        ) {
+
+            Image(
+                systemName:
+                    icon
+            )
+            .frame(
+                width: 28,
+                height: 28
+            )
+
+            VStack(
+                alignment: .leading,
+                spacing: 2
+            ) {
+
+                Text(title)
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                Text(
+                    value,
+                    format:
+                        .currency(
+                            code: "CNY"
+                        )
+                )
+                .font(
+                    .subheadline.bold()
+                )
+            }
+
+            Spacer(
+                minLength: 0
+            )
+        }
+        .frame(
+            maxWidth: .infinity,
+            alignment: .leading
         )
     }
 
@@ -149,14 +305,23 @@ struct HomeView: View {
         ) {
 
             Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
 
             Text(
                 value,
-                format: .currency(code: "CNY")
+                format:
+                    .currency(
+                        code: "CNY"
+                    )
             )
-            .font(.headline)
+            .font(
+                .headline
+            )
         }
         .frame(
             maxWidth: .infinity,
@@ -164,11 +329,170 @@ struct HomeView: View {
         )
         .padding()
         .background(
-            Color(.secondarySystemBackground)
+            Color(
+                .secondarySystemBackground
+            )
         )
         .clipShape(
             RoundedRectangle(
-                cornerRadius: 16
+                cornerRadius: 16,
+                style: .continuous
+            )
+        )
+    }
+
+
+    // MARK: - 信用卡负债
+
+    private var creditCardDebtSection:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 14
+        ) {
+
+            HStack {
+
+                Text("信用卡负债")
+                    .font(
+                        .title3.bold()
+                    )
+
+                Spacer()
+
+                Text(
+                    totalDebt,
+                    format:
+                        .currency(
+                            code: "CNY"
+                        )
+                )
+                .font(
+                    .subheadline.bold()
+                )
+            }
+
+
+            ForEach(
+                creditCards.prefix(3)
+            ) { card in
+
+                NavigationLink {
+
+                    CardDetailView(
+                        card: card
+                    )
+
+                } label: {
+
+                    HStack(
+                        spacing: 12
+                    ) {
+
+                        Image(
+                            systemName:
+                                "creditcard.fill"
+                        )
+                        .frame(
+                            width: 36,
+                            height: 36
+                        )
+                        .background(
+                            Color(
+                                .tertiarySystemBackground
+                            )
+                        )
+                        .clipShape(
+                            Circle()
+                        )
+
+                        VStack(
+                            alignment: .leading,
+                            spacing: 3
+                        ) {
+
+                            Text(
+                                card.bankName
+                            )
+                            .fontWeight(
+                                .medium
+                            )
+
+                            Text(
+                                "•••• \(card.lastFourDigits)"
+                            )
+                            .font(
+                                .caption
+                            )
+                            .foregroundStyle(
+                                .secondary
+                            )
+                        }
+
+                        Spacer()
+
+                        VStack(
+                            alignment: .trailing,
+                            spacing: 3
+                        ) {
+
+                            Text(
+                                card.currentDebt ?? 0,
+                                format:
+                                    .currency(
+                                        code: "CNY"
+                                    )
+                            )
+                            .fontWeight(
+                                .semibold
+                            )
+
+                            if let available =
+                                card.availableCredit {
+
+                                Text(
+                                    "可用 \(available.formatted(.currency(code: "CNY")))"
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+                            }
+                        }
+                    }
+                    .padding(
+                        .vertical,
+                        4
+                    )
+                }
+                .buttonStyle(
+                    .plain
+                )
+
+
+                if card.id !=
+                    creditCards
+                        .prefix(3)
+                        .last?
+                        .id {
+
+                    Divider()
+                }
+            }
+        }
+        .padding()
+        .background(
+            Color(
+                .secondarySystemBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 18,
+                style: .continuous
             )
         )
     }
@@ -176,7 +500,8 @@ struct HomeView: View {
 
     // MARK: - 最近账单
 
-    private var recentTransactions: some View {
+    private var recentTransactions:
+        some View {
 
         VStack(
             alignment: .leading,
@@ -184,17 +509,21 @@ struct HomeView: View {
         ) {
 
             Text("最近账单")
-                .font(.title3.bold())
+                .font(
+                    .title3.bold()
+                )
 
 
             if transactions.isEmpty {
 
                 ContentUnavailableView(
                     "暂无账单",
-                    systemImage: "tray",
-                    description: Text(
-                        "点击下方「记一笔」开始记录"
-                    )
+                    systemImage:
+                        "tray",
+                    description:
+                        Text(
+                            "点击下方「记一笔」开始记录"
+                        )
                 )
 
             } else {
@@ -208,31 +537,39 @@ struct HomeView: View {
                     NavigationLink {
 
                         TransactionDetailView(
-                            transaction: transaction
+                            transaction:
+                                transaction
                         )
 
                     } label: {
 
                         TransactionRowView(
-                            transaction: transaction,
-
+                            transaction:
+                                transaction,
                             accountName:
                                 accountName(
                                     transaction.accountID
                                 ),
-
                             targetAccountName:
                                 transaction
                                     .targetAccountID
                                     .flatMap {
                                         accountName($0)
+                                    },
+                            cardName:
+                                transaction
+                                    .bankCardID
+                                    .flatMap {
+                                        cardName($0)
                                     }
                         )
                         .contentShape(
                             Rectangle()
                         )
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(
+                        .plain
+                    )
 
 
                     if transaction.id !=
@@ -253,17 +590,25 @@ struct HomeView: View {
     }
 
 
-    // MARK: - 账户名称
-
     private func accountName(
         _ id: UUID
-    ) -> String {
+    ) -> String? {
 
         accounts.first {
-
             $0.id == id
-
         }?.name
-        ?? "未知账户"
+    }
+
+
+    private func cardName(
+        _ id: UUID
+    ) -> String? {
+
+        cards.first {
+            $0.id == id
+        }
+        .map {
+            "\($0.bankName) •••• \($0.lastFourDigits)"
+        }
     }
 }

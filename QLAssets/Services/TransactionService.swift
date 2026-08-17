@@ -4,6 +4,15 @@ import SwiftData
 
 enum TransactionService {
 
+    // 信用卡消费本身不对应资产账户，但 TransactionRecord 为兼容旧数据
+    // 仍保留非可选 accountID，因此使用一个固定占位 UUID。
+    static let noAccountID =
+        UUID(
+            uuidString:
+                "00000000-0000-0000-0000-000000000001"
+        )!
+
+
     // MARK: - 创建流水
 
     @discardableResult
@@ -11,53 +20,86 @@ enum TransactionService {
         type: TransactionType,
         amount: Double,
         category: String,
-        accountID: UUID,
+        accountID: UUID?,
         targetAccountID: UUID? = nil,
+        bankCardID: UUID? = nil,
         note: String,
         date: Date,
         accounts: [Account],
+        cards: [BankCard] = [],
         context: ModelContext
     ) -> Bool {
 
-        let normalizedAmount: Double
+        let normalizedAmount:
+            Double
 
         if type == .adjustment {
-            normalizedAmount = amount
+
+            normalizedAmount =
+                amount
+
         } else {
-            normalizedAmount = abs(amount)
+
+            normalizedAmount =
+                abs(amount)
         }
 
-        let record = TransactionRecord(
-            type: type,
-            amount: normalizedAmount,
-            category: category,
-            accountID: accountID,
-            targetAccountID: targetAccountID,
-            note: note,
-            date: date
-        )
+        let storedAccountID =
+            accountID ??
+            noAccountID
+
+        let record =
+            TransactionRecord(
+                type: type,
+                amount:
+                    normalizedAmount,
+                category:
+                    category,
+                accountID:
+                    storedAccountID,
+                targetAccountID:
+                    targetAccountID,
+                bankCardID:
+                    bankCardID,
+                note:
+                    note,
+                date:
+                    date
+            )
 
         guard apply(
             record,
-            accounts: accounts
+            accounts:
+                accounts,
+            cards:
+                cards
         ) else {
             return false
         }
 
-        context.insert(record)
+        context.insert(
+            record
+        )
 
         do {
+
             try context.save()
+
             return true
 
         } catch {
 
             revert(
                 record,
-                accounts: accounts
+                accounts:
+                    accounts,
+                cards:
+                    cards
             )
 
-            context.delete(record)
+            context.delete(
+                record
+            )
 
             return false
         }
@@ -68,30 +110,41 @@ enum TransactionService {
 
     @discardableResult
     static func delete(
-        _ transaction: TransactionRecord,
+        _ transaction:
+            TransactionRecord,
         accounts: [Account],
+        cards: [BankCard] = [],
         context: ModelContext
     ) -> Bool {
 
         guard revert(
             transaction,
-            accounts: accounts
+            accounts:
+                accounts,
+            cards:
+                cards
         ) else {
             return false
         }
 
-        context.delete(transaction)
+        context.delete(
+            transaction
+        )
 
         do {
+
             try context.save()
+
             return true
 
         } catch {
 
-            // 尽量恢复余额
             apply(
                 transaction,
-                accounts: accounts
+                accounts:
+                    accounts,
+                cards:
+                    cards
             )
 
             return false
@@ -103,26 +156,33 @@ enum TransactionService {
 
     @discardableResult
     static func update(
-        _ transaction: TransactionRecord,
+        _ transaction:
+            TransactionRecord,
         type: TransactionType,
         amount: Double,
         category: String,
-        accountID: UUID,
+        accountID: UUID?,
         targetAccountID: UUID?,
+        bankCardID: UUID? = nil,
         note: String,
         date: Date,
         accounts: [Account],
+        cards: [BankCard] = [],
         context: ModelContext
     ) -> Bool {
 
-        let snapshot = TransactionSnapshot(
-            transaction: transaction
-        )
+        let snapshot =
+            TransactionSnapshot(
+                transaction:
+                    transaction
+            )
 
-        // 先撤销旧流水
         guard revert(
             transaction,
-            accounts: accounts
+            accounts:
+                accounts,
+            cards:
+                cards
         ) else {
             return false
         }
@@ -131,9 +191,12 @@ enum TransactionService {
             type.rawValue
 
         if type == .adjustment {
+
             transaction.amount =
                 amount
+
         } else {
+
             transaction.amount =
                 abs(amount)
         }
@@ -142,11 +205,18 @@ enum TransactionService {
             category
 
         transaction.accountID =
-            accountID
+            accountID ??
+            noAccountID
 
         transaction.targetAccountID =
             type == .transfer
             ? targetAccountID
+            : nil
+
+        transaction.bankCardID =
+            type == .creditExpense ||
+            type == .creditRepayment
+            ? bankCardID
             : nil
 
         transaction.note =
@@ -155,47 +225,59 @@ enum TransactionService {
         transaction.date =
             date
 
-        // 再应用修改后的流水
         guard apply(
             transaction,
-            accounts: accounts
+            accounts:
+                accounts,
+            cards:
+                cards
         ) else {
 
             restore(
                 transaction,
-                snapshot: snapshot
+                snapshot:
+                    snapshot
             )
 
             apply(
                 transaction,
-                accounts: accounts
+                accounts:
+                    accounts,
+                cards:
+                    cards
             )
 
             return false
         }
 
         do {
+
             try context.save()
+
             return true
 
         } catch {
 
-            // 撤销修改后的影响
             revert(
                 transaction,
-                accounts: accounts
+                accounts:
+                    accounts,
+                cards:
+                    cards
             )
 
-            // 恢复旧数据
             restore(
                 transaction,
-                snapshot: snapshot
+                snapshot:
+                    snapshot
             )
 
-            // 重新应用旧流水
             apply(
                 transaction,
-                accounts: accounts
+                accounts:
+                    accounts,
+                cards:
+                    cards
             )
 
             return false
@@ -207,62 +289,156 @@ enum TransactionService {
 
     @discardableResult
     static func apply(
-        _ transaction: TransactionRecord,
-        accounts: [Account]
+        _ transaction:
+            TransactionRecord,
+        accounts: [Account],
+        cards: [BankCard] = []
     ) -> Bool {
 
-        guard let source =
-            findAccount(
-                transaction.accountID,
-                accounts: accounts
+        let amount =
+            abs(
+                transaction.amount
             )
-        else {
-            return false
-        }
 
         switch transaction.type {
 
-        case .expense:
-
-            source.balance -=
-                abs(transaction.amount)
-
-        case .income:
-
-            source.balance +=
-                abs(transaction.amount)
-
-        case .transfer:
+        case .creditExpense:
 
             guard
-                let targetID =
-                    transaction.targetAccountID,
+                let cardID =
+                    transaction.bankCardID,
+                let card =
+                    findCard(
+                        cardID,
+                        cards:
+                            cards
+                    ),
+                card.cardType ==
+                    .credit
+            else {
+                return false
+            }
 
-                targetID !=
-                    transaction.accountID,
+            card.currentDebt =
+                max(
+                    card.currentDebt ?? 0,
+                    0
+                ) +
+                amount
 
-                let target =
+            return true
+
+
+        case .creditRepayment:
+
+            guard
+                let cardID =
+                    transaction.bankCardID,
+                let card =
+                    findCard(
+                        cardID,
+                        cards:
+                            cards
+                    ),
+                card.cardType ==
+                    .credit,
+                let source =
                     findAccount(
-                        targetID,
-                        accounts: accounts
+                        transaction.accountID,
+                        accounts:
+                            accounts
                     )
             else {
                 return false
             }
 
+            let currentDebt =
+                max(
+                    card.currentDebt ?? 0,
+                    0
+                )
+
+            guard amount <=
+                    currentDebt + 0.0001
+            else {
+                return false
+            }
+
             source.balance -=
-                abs(transaction.amount)
+                amount
 
-            target.balance +=
-                abs(transaction.amount)
+            card.currentDebt =
+                max(
+                    currentDebt - amount,
+                    0
+                )
 
-        case .adjustment:
+            return true
 
-            source.balance +=
-                transaction.amount
+
+        case .expense,
+             .income,
+             .transfer,
+             .adjustment:
+
+            guard let source =
+                findAccount(
+                    transaction.accountID,
+                    accounts:
+                        accounts
+                )
+            else {
+                return false
+            }
+
+            switch transaction.type {
+
+            case .expense:
+
+                source.balance -=
+                    amount
+
+            case .income:
+
+                source.balance +=
+                    amount
+
+            case .transfer:
+
+                guard
+                    let targetID =
+                        transaction.targetAccountID,
+                    targetID !=
+                        transaction.accountID,
+                    let target =
+                        findAccount(
+                            targetID,
+                            accounts:
+                                accounts
+                        )
+                else {
+                    return false
+                }
+
+                source.balance -=
+                    amount
+
+                target.balance +=
+                    amount
+
+            case .adjustment:
+
+                source.balance +=
+                    transaction.amount
+
+            case .creditExpense,
+                 .creditRepayment:
+
+                break
+            }
+
+            return true
         }
-
-        return true
     }
 
 
@@ -270,63 +446,158 @@ enum TransactionService {
 
     @discardableResult
     static func revert(
-        _ transaction: TransactionRecord,
-        accounts: [Account]
+        _ transaction:
+            TransactionRecord,
+        accounts: [Account],
+        cards: [BankCard] = []
     ) -> Bool {
 
-        guard let source =
-            findAccount(
-                transaction.accountID,
-                accounts: accounts
+        let amount =
+            abs(
+                transaction.amount
             )
-        else {
-            return false
-        }
 
         switch transaction.type {
 
-        case .expense:
-
-            source.balance +=
-                abs(transaction.amount)
-
-        case .income:
-
-            source.balance -=
-                abs(transaction.amount)
-
-        case .transfer:
+        case .creditExpense:
 
             guard
-                let targetID =
-                    transaction.targetAccountID,
+                let cardID =
+                    transaction.bankCardID,
+                let card =
+                    findCard(
+                        cardID,
+                        cards:
+                            cards
+                    ),
+                card.cardType ==
+                    .credit
+            else {
+                return false
+            }
 
-                let target =
+            let currentDebt =
+                max(
+                    card.currentDebt ?? 0,
+                    0
+                )
+
+            guard currentDebt + 0.0001 >=
+                    amount
+            else {
+                return false
+            }
+
+            card.currentDebt =
+                max(
+                    currentDebt - amount,
+                    0
+                )
+
+            return true
+
+
+        case .creditRepayment:
+
+            guard
+                let cardID =
+                    transaction.bankCardID,
+                let card =
+                    findCard(
+                        cardID,
+                        cards:
+                            cards
+                    ),
+                card.cardType ==
+                    .credit,
+                let source =
                     findAccount(
-                        targetID,
-                        accounts: accounts
+                        transaction.accountID,
+                        accounts:
+                            accounts
                     )
             else {
                 return false
             }
 
             source.balance +=
-                abs(transaction.amount)
+                amount
 
-            target.balance -=
-                abs(transaction.amount)
+            card.currentDebt =
+                max(
+                    card.currentDebt ?? 0,
+                    0
+                ) +
+                amount
 
-        case .adjustment:
+            return true
 
-            source.balance -=
-                transaction.amount
+
+        case .expense,
+             .income,
+             .transfer,
+             .adjustment:
+
+            guard let source =
+                findAccount(
+                    transaction.accountID,
+                    accounts:
+                        accounts
+                )
+            else {
+                return false
+            }
+
+            switch transaction.type {
+
+            case .expense:
+
+                source.balance +=
+                    amount
+
+            case .income:
+
+                source.balance -=
+                    amount
+
+            case .transfer:
+
+                guard
+                    let targetID =
+                        transaction.targetAccountID,
+                    let target =
+                        findAccount(
+                            targetID,
+                            accounts:
+                                accounts
+                        )
+                else {
+                    return false
+                }
+
+                source.balance +=
+                    amount
+
+                target.balance -=
+                    amount
+
+            case .adjustment:
+
+                source.balance -=
+                    transaction.amount
+
+            case .creditExpense,
+                 .creditRepayment:
+
+                break
+            }
+
+            return true
         }
-
-        return true
     }
 
 
-    // MARK: - 查询账户
+    // MARK: - 查询
 
     static func findAccount(
         _ id: UUID,
@@ -339,11 +610,21 @@ enum TransactionService {
     }
 
 
-    // MARK: - 判断账户是否存在流水
+    static func findCard(
+        _ id: UUID,
+        cards: [BankCard]
+    ) -> BankCard? {
+
+        cards.first {
+            $0.id == id
+        }
+    }
+
 
     static func hasTransactions(
         accountID: UUID,
-        transactions: [TransactionRecord]
+        transactions:
+            [TransactionRecord]
     ) -> Bool {
 
         transactions.contains {
@@ -369,11 +650,16 @@ enum TransactionService {
 
         let accountID: UUID
 
-        let targetAccountID: UUID?
+        let targetAccountID:
+            UUID?
+
+        let bankCardID:
+            UUID?
 
         let note: String
 
         let date: Date
+
 
         init(
             transaction:
@@ -394,6 +680,9 @@ enum TransactionService {
 
             targetAccountID =
                 transaction.targetAccountID
+
+            bankCardID =
+                transaction.bankCardID
 
             note =
                 transaction.note
@@ -425,6 +714,9 @@ enum TransactionService {
 
         transaction.targetAccountID =
             snapshot.targetAccountID
+
+        transaction.bankCardID =
+            snapshot.bankCardID
 
         transaction.note =
             snapshot.note

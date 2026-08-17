@@ -4,37 +4,100 @@ import SwiftData
 
 struct AddTransactionView: View {
 
+    private enum EntryMode:
+        String,
+        CaseIterable,
+        Identifiable {
+
+        case expense = "支出"
+        case income = "收入"
+        case transfer = "转账"
+        case creditCard = "信用卡"
+
+        var id: String {
+            rawValue
+        }
+    }
+
+
+    private enum CreditAction:
+        String,
+        CaseIterable,
+        Identifiable {
+
+        case purchase = "消费"
+        case repayment = "还款"
+
+        var id: String {
+            rawValue
+        }
+    }
+
+
     @Environment(\.modelContext)
     private var modelContext
 
     @Query(
         sort: \Account.createdAt
     )
-    private var accounts: [Account]
+    private var accounts:
+        [Account]
 
-    @State private var type:
-        TransactionType = .expense
+    @Query(
+        sort: [
+            SortDescriptor(
+                \BankCard.sortOrder
+            ),
+            SortDescriptor(
+                \BankCard.createdAt
+            )
+        ]
+    )
+    private var cards:
+        [BankCard]
 
-    @State private var amountText = ""
+    @State
+    private var mode:
+        EntryMode = .expense
 
-    @State private var category =
+    @State
+    private var creditAction:
+        CreditAction = .purchase
+
+    @State
+    private var amountText =
+        ""
+
+    @State
+    private var category =
         "餐饮"
 
-    @State private var sourceAccountID:
+    @State
+    private var sourceAccountID:
         UUID?
 
-    @State private var targetAccountID:
+    @State
+    private var targetAccountID:
         UUID?
 
-    @State private var note = ""
+    @State
+    private var selectedCreditCardID:
+        UUID?
 
-    @State private var date =
+    @State
+    private var note =
+        ""
+
+    @State
+    private var date =
         Date()
 
-    @State private var showSavedAlert =
+    @State
+    private var showSavedAlert =
         false
 
-    @State private var showErrorAlert =
+    @State
+    private var showErrorAlert =
         false
 
     @FocusState
@@ -67,6 +130,43 @@ struct AddTransactionView: View {
     ]
 
 
+    private var creditCards:
+        [BankCard] {
+
+        cards.filter {
+            $0.cardType == .credit
+        }
+    }
+
+
+    private var transactionType:
+        TransactionType {
+
+        switch mode {
+
+        case .expense:
+            return .expense
+
+        case .income:
+            return .income
+
+        case .transfer:
+            return .transfer
+
+        case .creditCard:
+
+            switch creditAction {
+
+            case .purchase:
+                return .creditExpense
+
+            case .repayment:
+                return .creditRepayment
+            }
+        }
+    }
+
+
     var body: some View {
 
         Form {
@@ -75,12 +175,12 @@ struct AddTransactionView: View {
 
                 Picker(
                     "类型",
-                    selection: $type
+                    selection:
+                        $mode
                 ) {
 
                     ForEach(
-                        TransactionType
-                            .userSelectableCases
+                        EntryMode.allCases
                     ) { item in
 
                         Text(
@@ -92,6 +192,31 @@ struct AddTransactionView: View {
                 .pickerStyle(
                     .segmented
                 )
+
+
+                if mode ==
+                    .creditCard {
+
+                    Picker(
+                        "信用卡操作",
+                        selection:
+                            $creditAction
+                    ) {
+
+                        ForEach(
+                            CreditAction.allCases
+                        ) { action in
+
+                            Text(
+                                action.rawValue
+                            )
+                            .tag(action)
+                        }
+                    }
+                    .pickerStyle(
+                        .segmented
+                    )
+                }
             }
 
 
@@ -107,7 +232,8 @@ struct AddTransactionView: View {
 
                     TextField(
                         "0.00",
-                        text: $amountText
+                        text:
+                            $amountText
                     )
                     .keyboardType(
                         .decimalPad
@@ -122,7 +248,7 @@ struct AddTransactionView: View {
             }
 
 
-            if type != .transfer {
+            if showsCategory {
 
                 Section("分类") {
 
@@ -145,41 +271,132 @@ struct AddTransactionView: View {
             }
 
 
-            Section(
-                type == .transfer
-                ? "转出账户"
-                : "账户"
-            ) {
+            if mode ==
+                .creditCard {
 
-                Picker(
-                    "选择账户",
-                    selection:
-                        $sourceAccountID
-                ) {
+                Section("信用卡") {
 
-                    Text("请选择")
-                        .tag(
-                            UUID?.none
+                    if creditCards.isEmpty {
+
+                        Label(
+                            "还没有信用卡，请先到卡包添加",
+                            systemImage:
+                                "creditcard"
+                        )
+                        .foregroundStyle(
+                            .secondary
                         )
 
-                    ForEach(
-                        accounts
-                    ) { account in
+                    } else {
 
-                        Text(
-                            "\(account.name)  ¥\(account.balance, specifier: "%.2f")"
-                        )
-                        .tag(
-                            Optional(
-                                account.id
-                            )
-                        )
+                        Picker(
+                            "选择信用卡",
+                            selection:
+                                $selectedCreditCardID
+                        ) {
+
+                            Text("请选择")
+                                .tag(
+                                    UUID?.none
+                                )
+
+                            ForEach(
+                                creditCards
+                            ) { card in
+
+                                Text(
+                                    "\(card.bankName) •••• \(card.lastFourDigits)"
+                                )
+                                .tag(
+                                    Optional(
+                                        card.id
+                                    )
+                                )
+                            }
+                        }
+
+
+                        if let card =
+                            selectedCreditCard {
+
+                            LabeledContent(
+                                "当前欠款"
+                            ) {
+
+                                Text(
+                                    card.currentDebt ?? 0,
+                                    format:
+                                        .currency(
+                                            code:
+                                                "CNY"
+                                        )
+                                )
+                                .fontWeight(
+                                    .semibold
+                                )
+                            }
+
+
+                            if let available =
+                                card.availableCredit {
+
+                                LabeledContent(
+                                    "可用额度"
+                                ) {
+
+                                    Text(
+                                        available,
+                                        format:
+                                            .currency(
+                                                code:
+                                                    "CNY"
+                                            )
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
 
 
-            if type == .transfer {
+            if showsSourceAccount {
+
+                Section(
+                    sourceSectionTitle
+                ) {
+
+                    Picker(
+                        "选择账户",
+                        selection:
+                            $sourceAccountID
+                    ) {
+
+                        Text("请选择")
+                            .tag(
+                                UUID?.none
+                            )
+
+                        ForEach(
+                            accounts
+                        ) { account in
+
+                            Text(
+                                "\(account.name)  \(account.balance.formatted(.currency(code: "CNY")))"
+                            )
+                            .tag(
+                                Optional(
+                                    account.id
+                                )
+                            )
+                        }
+                    }
+                }
+            }
+
+
+            if mode ==
+                .transfer {
 
                 Section("转入账户") {
 
@@ -216,12 +433,14 @@ struct AddTransactionView: View {
 
                 DatePicker(
                     "日期",
-                    selection: $date
+                    selection:
+                        $date
                 )
 
                 TextField(
                     "备注（可选）",
-                    text: $note
+                    text:
+                        $note
                 )
             }
 
@@ -257,7 +476,8 @@ struct AddTransactionView: View {
         .toolbar {
 
             ToolbarItemGroup(
-                placement: .keyboard
+                placement:
+                    .keyboard
             ) {
 
                 Spacer()
@@ -274,24 +494,35 @@ struct AddTransactionView: View {
         }
         .onAppear {
 
-            if sourceAccountID ==
-                nil {
-
-                sourceAccountID =
-                    accounts.first?.id
-            }
+            ensureDefaults()
         }
-        .onChange(of: type) {
+        .onChange(
+            of: mode
+        ) { _ in
 
-            if type != .transfer {
+            updateForModeChange()
+        }
+        .onChange(
+            of: creditAction
+        ) { _ in
 
-                category =
-                    currentCategories
-                        .first
-                    ?? "其他"
+            updateForCreditActionChange()
+        }
+        .onChange(
+            of: creditCards.map(\.id)
+        ) { _ in
 
-                targetAccountID =
-                    nil
+            if selectedCreditCardID ==
+                nil ||
+               !creditCards.contains(
+                    where: {
+                        $0.id ==
+                            selectedCreditCardID
+                    }
+               ) {
+
+                selectedCreditCardID =
+                    creditCards.first?.id
             }
         }
         .alert(
@@ -305,7 +536,7 @@ struct AddTransactionView: View {
         } message: {
 
             Text(
-                "账户余额已同步更新"
+                successMessage
             )
         }
         .alert(
@@ -319,8 +550,51 @@ struct AddTransactionView: View {
         } message: {
 
             Text(
-                "请检查账户和金额是否正确"
+                "请检查金额、账户和信用卡信息是否正确"
             )
+        }
+    }
+
+
+    private var showsCategory:
+        Bool {
+
+        switch transactionType {
+
+        case .expense,
+             .income,
+             .creditExpense:
+            return true
+
+        case .transfer,
+             .creditRepayment,
+             .adjustment:
+            return false
+        }
+    }
+
+
+    private var showsSourceAccount:
+        Bool {
+
+        transactionType !=
+            .creditExpense
+    }
+
+
+    private var sourceSectionTitle:
+        String {
+
+        switch transactionType {
+
+        case .transfer:
+            return "转出账户"
+
+        case .creditRepayment:
+            return "还款账户"
+
+        default:
+            return "账户"
         }
     }
 
@@ -328,17 +602,34 @@ struct AddTransactionView: View {
     private var currentCategories:
         [String] {
 
-        switch type {
+        switch transactionType {
 
-        case .expense:
+        case .expense,
+             .creditExpense:
             return expenseCategories
 
         case .income:
             return incomeCategories
 
         case .transfer,
+             .creditRepayment,
              .adjustment:
             return []
+        }
+    }
+
+
+    private var selectedCreditCard:
+        BankCard? {
+
+        guard let id =
+            selectedCreditCardID
+        else {
+            return nil
+        }
+
+        return creditCards.first {
+            $0.id == id
         }
     }
 
@@ -361,21 +652,141 @@ struct AddTransactionView: View {
 
         guard
             let amount,
-            amount > 0,
-            sourceAccountID != nil
+            amount > 0
         else {
             return false
         }
 
-        if type == .transfer {
+        switch transactionType {
+
+        case .expense,
+             .income:
 
             return
-                targetAccountID != nil &&
+                sourceAccountID !=
+                nil
+
+        case .transfer:
+
+            return
+                sourceAccountID !=
+                    nil &&
+                targetAccountID !=
+                    nil &&
                 targetAccountID !=
                     sourceAccountID
+
+        case .creditExpense:
+
+            return
+                selectedCreditCard !=
+                nil
+
+        case .creditRepayment:
+
+            guard
+                sourceAccountID != nil,
+                let card =
+                    selectedCreditCard
+            else {
+                return false
+            }
+
+            return amount <=
+                max(
+                    card.currentDebt ?? 0,
+                    0
+                ) +
+                0.0001
+
+        case .adjustment:
+            return false
+        }
+    }
+
+
+    private var successMessage:
+        String {
+
+        switch transactionType {
+
+        case .creditExpense:
+            return "信用卡欠款已增加，并计入总负债"
+
+        case .creditRepayment:
+            return "还款账户余额和信用卡欠款已同步更新"
+
+        default:
+            return "账户余额已同步更新"
+        }
+    }
+
+
+    private func ensureDefaults() {
+
+        if sourceAccountID ==
+            nil {
+
+            sourceAccountID =
+                accounts.first?.id
         }
 
-        return true
+        if selectedCreditCardID ==
+            nil {
+
+            selectedCreditCardID =
+                creditCards.first?.id
+        }
+    }
+
+
+    private func updateForModeChange() {
+
+        targetAccountID =
+            nil
+
+        switch mode {
+
+        case .expense:
+            category =
+                expenseCategories.first ??
+                "其他"
+
+        case .income:
+            category =
+                incomeCategories.first ??
+                "其他"
+
+        case .transfer:
+            category =
+                "转账"
+
+        case .creditCard:
+            updateForCreditActionChange()
+        }
+    }
+
+
+    private func updateForCreditActionChange() {
+
+        switch creditAction {
+
+        case .purchase:
+            category =
+                expenseCategories.first ??
+                "其他"
+
+        case .repayment:
+            category =
+                "信用卡还款"
+        }
+
+        if selectedCreditCardID ==
+            nil {
+
+            selectedCreditCardID =
+                creditCards.first?.id
+        }
     }
 
 
@@ -384,31 +795,50 @@ struct AddTransactionView: View {
         isAmountFocused =
             false
 
-        guard
-            let amount,
-            let sourceID =
-                sourceAccountID
+        guard let amount
         else {
             return
         }
 
         let success =
             TransactionService.create(
-                type: type,
-                amount: amount,
+                type:
+                    transactionType,
+                amount:
+                    amount,
                 category:
-                    type == .transfer
+                    transactionType ==
+                        .transfer
                     ? "转账"
+                    : transactionType ==
+                        .creditRepayment
+                    ? "信用卡还款"
                     : category,
                 accountID:
-                    sourceID,
+                    transactionType ==
+                        .creditExpense
+                    ? nil
+                    : sourceAccountID,
                 targetAccountID:
-                    type == .transfer
+                    transactionType ==
+                        .transfer
                     ? targetAccountID
                     : nil,
-                note: note,
-                date: date,
-                accounts: accounts,
+                bankCardID:
+                    transactionType ==
+                        .creditExpense ||
+                    transactionType ==
+                        .creditRepayment
+                    ? selectedCreditCardID
+                    : nil,
+                note:
+                    note,
+                date:
+                    date,
+                accounts:
+                    accounts,
+                cards:
+                    cards,
                 context:
                     modelContext
             )
@@ -430,16 +860,16 @@ struct AddTransactionView: View {
 
     private func resetForm() {
 
-        amountText = ""
+        amountText =
+            ""
 
-        note = ""
+        note =
+            ""
 
-        date = Date()
+        date =
+            Date()
 
-        if type == .transfer {
-
-            targetAccountID =
-                nil
-        }
+        targetAccountID =
+            nil
     }
 }

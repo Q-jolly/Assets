@@ -21,6 +21,12 @@ struct TransactionListView: View {
     private var accounts:
         [Account]
 
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
+
 
     var body: some View {
 
@@ -58,16 +64,19 @@ struct TransactionListView: View {
                                 transaction,
                             accountName:
                                 accountName(
-                                    transaction
-                                        .accountID
+                                    transaction.accountID
                                 ),
                             targetAccountName:
                                 transaction
                                     .targetAccountID
                                     .flatMap {
-                                        accountName(
-                                            $0
-                                        )
+                                        accountName($0)
+                                    },
+                            cardName:
+                                transaction
+                                    .bankCardID
+                                    .flatMap {
+                                        cardName($0)
                                     }
                         )
                     }
@@ -86,14 +95,24 @@ struct TransactionListView: View {
 
     private func accountName(
         _ id: UUID
-    ) -> String {
+    ) -> String? {
 
         accounts.first {
-
             $0.id == id
-
         }?.name
-        ?? "未知账户"
+    }
+
+
+    private func cardName(
+        _ id: UUID
+    ) -> String? {
+
+        cards.first {
+            $0.id == id
+        }
+        .map {
+            "\($0.bankName) •••• \($0.lastFourDigits)"
+        }
     }
 
 
@@ -107,18 +126,18 @@ struct TransactionListView: View {
                 transactions[index]
 
             _ =
-                TransactionService
-                    .delete(
-                        transaction,
-                        accounts:
-                            accounts,
-                        context:
-                            modelContext
-                    )
+                TransactionService.delete(
+                    transaction,
+                    accounts:
+                        accounts,
+                    cards:
+                        cards,
+                    context:
+                        modelContext
+                )
         }
     }
 }
-
 
 
 // MARK: - 流水行
@@ -128,10 +147,13 @@ struct TransactionRowView: View {
     let transaction:
         TransactionRecord
 
-    let accountName:
-        String
+    var accountName:
+        String? = nil
 
     var targetAccountName:
+        String? = nil
+
+    var cardName:
         String? = nil
 
 
@@ -164,19 +186,16 @@ struct TransactionRowView: View {
 
 
             VStack(
-                alignment:
-                    .leading,
+                alignment: .leading,
                 spacing: 4
             ) {
 
                 Text(
-                    transaction
-                        .category
+                    transaction.category
                 )
                 .font(
                     .headline
                 )
-
 
                 Text(
                     subtitle
@@ -187,7 +206,6 @@ struct TransactionRowView: View {
                 .foregroundStyle(
                     .secondary
                 )
-
 
                 if !transaction
                     .note
@@ -227,23 +245,38 @@ struct TransactionRowView: View {
     private var subtitle:
         String {
 
-        let accountText:
+        let sourceText:
             String
 
-        if transaction.type ==
-            .transfer {
+        switch transaction.type {
 
-            accountText =
-                "\(accountName) → \(targetAccountName ?? "未知账户")"
+        case .transfer:
 
-        } else {
+            sourceText =
+                "\(accountName ?? "未知账户") → \(targetAccountName ?? "未知账户")"
 
-            accountText =
-                accountName
+        case .creditExpense:
+
+            sourceText =
+                cardName ??
+                "未知信用卡"
+
+        case .creditRepayment:
+
+            sourceText =
+                "\(accountName ?? "未知账户") → \(cardName ?? "未知信用卡")"
+
+        case .expense,
+             .income,
+             .adjustment:
+
+            sourceText =
+                accountName ??
+                "未知账户"
         }
 
         return
-            "\(accountText) · \(AppTime.listDateTime(transaction.date))"
+            "\(sourceText) · \(AppTime.listDateTime(transaction.date))"
     }
 
 
@@ -252,19 +285,19 @@ struct TransactionRowView: View {
 
         switch transaction.type {
 
-        case .expense:
+        case .expense,
+             .creditExpense:
 
             return
                 "-\(abs(transaction.amount).formatted(.currency(code: "CNY")))"
-
 
         case .income:
 
             return
                 "+\(abs(transaction.amount).formatted(.currency(code: "CNY")))"
 
-
-        case .transfer:
+        case .transfer,
+             .creditRepayment:
 
             return
                 abs(transaction.amount)
@@ -274,11 +307,9 @@ struct TransactionRowView: View {
                         )
                     )
 
-
         case .adjustment:
 
-            if transaction.amount >
-                0 {
+            if transaction.amount > 0 {
 
                 return
                     "+\(transaction.amount.formatted(.currency(code: "CNY")))"
@@ -296,7 +327,6 @@ struct TransactionRowView: View {
         }
     }
 }
-
 
 
 // MARK: - 流水详情
@@ -318,12 +348,22 @@ struct TransactionDetailView: View {
     private var accounts:
         [Account]
 
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
+
     @State
     private var showEdit =
         false
 
     @State
     private var showDeleteConfirmation =
+        false
+
+    @State
+    private var showDeleteError =
         false
 
 
@@ -341,7 +381,6 @@ struct TransactionDetailView: View {
                             .rawValue
                 )
 
-
                 LabeledContent(
                     "金额"
                 ) {
@@ -354,54 +393,18 @@ struct TransactionDetailView: View {
                     )
                 }
 
-
                 LabeledContent(
                     "分类",
                     value:
-                        transaction
-                            .category
+                        transaction.category
                 )
             }
 
 
-            Section(
-                "账户"
-            ) {
-
-                LabeledContent(
-                    transaction.type ==
-                        .transfer
-                    ? "转出账户"
-                    : "账户",
-                    value:
-                        accountName(
-                            transaction
-                                .accountID
-                        )
-                )
+            transactionSourceSection
 
 
-                if
-                    transaction.type ==
-                        .transfer,
-                    let targetID =
-                        transaction
-                            .targetAccountID {
-
-                    LabeledContent(
-                        "转入账户",
-                        value:
-                            accountName(
-                                targetID
-                            )
-                    )
-                }
-            }
-
-
-            Section(
-                "时间"
-            ) {
+            Section("时间") {
 
                 LabeledContent(
                     "日期"
@@ -420,9 +423,7 @@ struct TransactionDetailView: View {
                 .note
                 .isEmpty {
 
-                Section(
-                    "备注"
-                ) {
+                Section("备注") {
 
                     Text(
                         transaction.note
@@ -433,8 +434,7 @@ struct TransactionDetailView: View {
 
             Section {
 
-                if transaction.type !=
-                    .adjustment {
+                if canEdit {
 
                     Button {
 
@@ -450,7 +450,6 @@ struct TransactionDetailView: View {
                         )
                     }
                 }
-
 
                 Button(
                     role:
@@ -487,7 +486,7 @@ struct TransactionDetailView: View {
             )
         }
         .confirmationDialog(
-            "确定删除这笔账单？",
+            "删除这笔账单？",
             isPresented:
                 $showDeleteConfirmation,
             titleVisibility:
@@ -496,23 +495,134 @@ struct TransactionDetailView: View {
 
             Button(
                 "删除",
-                role: .destructive
+                role:
+                    .destructive
             ) {
 
                 deleteTransaction()
             }
 
-
             Button(
                 "取消",
-                role: .cancel
+                role:
+                    .cancel
             ) {}
+
         } message: {
 
             Text(
-                "删除后，关联账户余额会自动恢复。"
+                "删除后会同步恢复账户余额或信用卡欠款。"
             )
         }
+        .alert(
+            "删除失败",
+            isPresented:
+                $showDeleteError
+        ) {
+
+            Button("好的") {}
+
+        } message: {
+
+            Text(
+                "当前账户或信用卡状态无法安全撤销这笔记录。"
+            )
+        }
+    }
+
+
+    @ViewBuilder
+    private var transactionSourceSection:
+        some View {
+
+        switch transaction.type {
+
+        case .creditExpense:
+
+            Section("信用卡") {
+
+                LabeledContent(
+                    "信用卡",
+                    value:
+                        cardName(
+                            transaction.bankCardID
+                        )
+                )
+            }
+
+        case .creditRepayment:
+
+            Section("还款") {
+
+                LabeledContent(
+                    "还款账户",
+                    value:
+                        accountName(
+                            transaction.accountID
+                        )
+                )
+
+                LabeledContent(
+                    "信用卡",
+                    value:
+                        cardName(
+                            transaction.bankCardID
+                        )
+                )
+            }
+
+        case .transfer:
+
+            Section("账户") {
+
+                LabeledContent(
+                    "转出账户",
+                    value:
+                        accountName(
+                            transaction.accountID
+                        )
+                )
+
+                if let targetID =
+                    transaction.targetAccountID {
+
+                    LabeledContent(
+                        "转入账户",
+                        value:
+                            accountName(
+                                targetID
+                            )
+                    )
+                }
+            }
+
+        case .expense,
+             .income,
+             .adjustment:
+
+            Section("账户") {
+
+                LabeledContent(
+                    "账户",
+                    value:
+                        accountName(
+                            transaction.accountID
+                        )
+                )
+            }
+        }
+    }
+
+
+    private var canEdit:
+        Bool {
+
+        transaction.type ==
+            .expense ||
+        transaction.type ==
+            .income ||
+        transaction.type ==
+            .transfer
     }
 
 
@@ -521,19 +631,19 @@ struct TransactionDetailView: View {
 
         switch transaction.type {
 
-        case .expense:
+        case .expense,
+             .creditExpense:
 
             return
                 "-\(abs(transaction.amount).formatted(.currency(code: "CNY")))"
-
 
         case .income:
 
             return
                 "+\(abs(transaction.amount).formatted(.currency(code: "CNY")))"
 
-
-        case .transfer:
+        case .transfer,
+             .creditRepayment:
 
             return
                 abs(transaction.amount)
@@ -543,25 +653,15 @@ struct TransactionDetailView: View {
                         )
                     )
 
-
         case .adjustment:
 
-            if transaction.amount >=
-                0 {
-
-                return
-                    "+\(transaction.amount.formatted(.currency(code: "CNY")))"
-
-            } else {
-
-                return
-                    transaction.amount
-                        .formatted(
-                            .currency(
-                                code: "CNY"
-                            )
+            return
+                transaction.amount
+                    .formatted(
+                        .currency(
+                            code: "CNY"
                         )
-            }
+                    )
         }
     }
 
@@ -571,11 +671,33 @@ struct TransactionDetailView: View {
     ) -> String {
 
         accounts.first {
-
             $0.id == id
+        }?.name ??
+        "未知账户"
+    }
 
-        }?.name
-        ?? "未知账户"
+
+    private func cardName(
+        _ id: UUID?
+    ) -> String {
+
+        guard let id
+        else {
+            return "未知信用卡"
+        }
+
+        guard let card =
+            cards.first(
+                where: {
+                    $0.id == id
+                }
+            )
+        else {
+            return "未知信用卡"
+        }
+
+        return
+            "\(card.bankName) •••• \(card.lastFourDigits)"
     }
 
 
@@ -586,6 +708,8 @@ struct TransactionDetailView: View {
                 transaction,
                 accounts:
                     accounts,
+                cards:
+                    cards,
                 context:
                     modelContext
             )
@@ -593,19 +717,22 @@ struct TransactionDetailView: View {
         if success {
 
             dismiss()
+
+        } else {
+
+            showDeleteError =
+                true
         }
     }
 }
 
 
-
-// MARK: - 编辑流水
+// MARK: - 编辑普通流水
 
 struct EditTransactionView: View {
 
     let transaction:
         TransactionRecord
-
 
     @Environment(\.dismiss)
     private var dismiss
@@ -613,53 +740,43 @@ struct EditTransactionView: View {
     @Environment(\.modelContext)
     private var modelContext
 
-
     @Query(
         sort: \Account.createdAt
     )
     private var accounts:
         [Account]
 
-
     @State
     private var type:
         TransactionType
-
 
     @State
     private var amountText:
         String
 
-
     @State
     private var category:
         String
-
 
     @State
     private var sourceAccountID:
         UUID?
 
-
     @State
     private var targetAccountID:
         UUID?
-
 
     @State
     private var note:
         String
 
-
     @State
     private var date:
         Date
 
-
     @State
     private var showError =
         false
-
 
     @FocusState
     private var isAmountFocused:
@@ -678,7 +795,6 @@ struct EditTransactionView: View {
         "日用",
         "其他"
     ]
-
 
     private let incomeCategories = [
         "工资",
@@ -712,8 +828,7 @@ struct EditTransactionView: View {
                         format:
                             "%.2f",
                         abs(
-                            transaction
-                                .amount
+                            transaction.amount
                         )
                     )
             )
@@ -721,22 +836,19 @@ struct EditTransactionView: View {
         _category =
             State(
                 initialValue:
-                    transaction
-                        .category
+                    transaction.category
             )
 
         _sourceAccountID =
             State(
                 initialValue:
-                    transaction
-                        .accountID
+                    transaction.accountID
             )
 
         _targetAccountID =
             State(
                 initialValue:
-                    transaction
-                        .targetAccountID
+                    transaction.targetAccountID
             )
 
         _note =
@@ -767,16 +879,20 @@ struct EditTransactionView: View {
                             $type
                     ) {
 
-                        ForEach(
-                            TransactionType
-                                .userSelectableCases
-                        ) { item in
-
-                            Text(
-                                item.rawValue
+                        Text("支出")
+                            .tag(
+                                TransactionType.expense
                             )
-                            .tag(item)
-                        }
+
+                        Text("收入")
+                            .tag(
+                                TransactionType.income
+                            )
+
+                        Text("转账")
+                            .tag(
+                                TransactionType.transfer
+                            )
                     }
                     .pickerStyle(
                         .segmented
@@ -811,9 +927,7 @@ struct EditTransactionView: View {
                 if type !=
                     .transfer {
 
-                    Section(
-                        "分类"
-                    ) {
+                    Section("分类") {
 
                         Picker(
                             "分类",
@@ -826,10 +940,8 @@ struct EditTransactionView: View {
                                 id: \.self
                             ) { item in
 
-                                Text(
-                                    item
-                                )
-                                .tag(item)
+                                Text(item)
+                                    .tag(item)
                             }
                         }
                     }
@@ -873,9 +985,7 @@ struct EditTransactionView: View {
                 if type ==
                     .transfer {
 
-                    Section(
-                        "转入账户"
-                    ) {
+                    Section("转入账户") {
 
                         Picker(
                             "选择账户",
@@ -906,9 +1016,7 @@ struct EditTransactionView: View {
                 }
 
 
-                Section(
-                    "其他"
-                ) {
+                Section("其他") {
 
                     DatePicker(
                         "日期",
@@ -940,11 +1048,9 @@ struct EditTransactionView: View {
                 ) {
 
                     Button("取消") {
-
                         dismiss()
                     }
                 }
-
 
                 ToolbarItem(
                     placement:
@@ -952,14 +1058,12 @@ struct EditTransactionView: View {
                 ) {
 
                     Button("保存") {
-
                         save()
                     }
                     .disabled(
                         !canSave
                     )
                 }
-
 
                 ToolbarItemGroup(
                     placement:
@@ -977,10 +1081,9 @@ struct EditTransactionView: View {
             }
             .onChange(
                 of: type
-            ) {
+            ) { _ in
 
-                if type ==
-                    .transfer {
+                if type == .transfer {
 
                     category =
                         "转账"
@@ -991,9 +1094,8 @@ struct EditTransactionView: View {
                         nil
 
                     category =
-                        currentCategories
-                            .first
-                        ?? "其他"
+                        currentCategories.first ??
+                        "其他"
                 }
             }
             .alert(
@@ -1020,15 +1122,12 @@ struct EditTransactionView: View {
         switch type {
 
         case .expense:
-            return
-                expenseCategories
+            return expenseCategories
 
         case .income:
-            return
-                incomeCategories
+            return incomeCategories
 
-        case .transfer,
-             .adjustment:
+        default:
             return []
         }
     }
@@ -1053,25 +1152,22 @@ struct EditTransactionView: View {
         guard
             let amount,
             amount > 0,
-            sourceAccountID !=
-                nil
+            sourceAccountID != nil
         else {
-
             return false
         }
 
-        if type ==
-            .transfer {
+        if type == .transfer {
 
             return
-                targetAccountID !=
-                    nil &&
-
+                targetAccountID != nil &&
                 targetAccountID !=
                     sourceAccountID
         }
 
-        return true
+        return
+            type == .expense ||
+            type == .income
     }
 
 
