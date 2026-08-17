@@ -21,11 +21,30 @@ struct StatisticsView: View {
     private var showBudgetEditor =
         false
 
+    @State
+    private var selectedMonth:
+        Date =
+            AppTime.calendar.dateInterval(
+                of: .month,
+                for: Date()
+            )?.start
+            ?? Date()
 
-    private var now:
+    @State
+    private var selectedDay:
+        Date?
+
+
+    // MARK: - 月份
+
+    private var currentMonthStart:
         Date {
 
-        Date()
+        AppTime.calendar.dateInterval(
+            of: .month,
+            for: Date()
+        )?.start
+        ?? Date()
     }
 
 
@@ -34,8 +53,9 @@ struct StatisticsView: View {
 
         AppTime.calendar.dateInterval(
             of: .month,
-            for: now
-        )?.start ?? now
+            for: selectedMonth
+        )?.start
+        ?? selectedMonth
     }
 
 
@@ -46,81 +66,86 @@ struct StatisticsView: View {
             byAdding: .month,
             value: 1,
             to: monthStart
-        ) ?? now
+        )
+        ?? monthStart
     }
 
 
-    private var currentMonthTransactions:
-        [TransactionRecord] {
+    private var previousMonthStart:
+        Date {
 
-        transactions.filter {
-            $0.date >= monthStart &&
-            $0.date < monthEnd
-        }
+        AppTime.calendar.date(
+            byAdding: .month,
+            value: -1,
+            to: monthStart
+        )
+        ?? monthStart
     }
 
 
-    private var monthlyExpense:
-        Double {
+    private var previousMonthEnd:
+        Date {
 
-        currentMonthTransactions
-            .filter {
-                $0.type == .expense ||
-                $0.type == .creditExpense
-            }
-            .reduce(0) {
-                $0 + abs($1.amount)
-            }
+        monthStart
     }
 
 
-    private var monthlyIncome:
-        Double {
+    private var lastYearMonthStart:
+        Date {
 
-        currentMonthTransactions
-            .filter {
-                $0.type == .income
-            }
-            .reduce(0) {
-                $0 + abs($1.amount)
-            }
+        AppTime.calendar.date(
+            byAdding: .year,
+            value: -1,
+            to: monthStart
+        )
+        ?? monthStart
     }
 
 
-    private var monthlyBalance:
-        Double {
+    private var lastYearMonthEnd:
+        Date {
 
-        monthlyIncome -
-        monthlyExpense
+        AppTime.calendar.date(
+            byAdding: .month,
+            value: 1,
+            to: lastYearMonthStart
+        )
+        ?? lastYearMonthStart
     }
 
 
-    private var budgetProgress:
-        Double {
+    private var isCurrentMonth:
+        Bool {
 
-        guard monthlyBudget > 0
-        else {
-            return 0
-        }
-
-        return min(
-            monthlyExpense /
-            monthlyBudget,
-            1
+        AppTime.calendar.isDate(
+            monthStart,
+            equalTo:
+                currentMonthStart,
+            toGranularity:
+                .month
         )
     }
 
 
-    private var budgetRemaining:
-        Double {
+    private var canGoNextMonth:
+        Bool {
 
-        monthlyBudget -
-        monthlyExpense
+        monthStart <
+        currentMonthStart
     }
 
 
-    private var currentMonthTitle:
+    private var monthTitle:
         String {
+
+        monthFormatter.string(
+            from: monthStart
+        )
+    }
+
+
+    private var monthFormatter:
+        DateFormatter {
 
         let formatter =
             DateFormatter()
@@ -140,20 +165,310 @@ struct StatisticsView: View {
         formatter.dateFormat =
             "yyyy年M月"
 
-        return formatter.string(
-            from: now
+        return formatter
+    }
+
+
+    private func moveMonth(
+        by value:
+            Int
+    ) {
+
+        guard
+            let newMonth =
+                AppTime.calendar.date(
+                    byAdding:
+                        .month,
+                    value:
+                        value,
+                    to:
+                        monthStart
+                )
+        else {
+            return
+        }
+
+        if newMonth >
+            currentMonthStart {
+
+            selectedMonth =
+                currentMonthStart
+
+        } else {
+
+            selectedMonth =
+                newMonth
+        }
+
+        selectedDay =
+            nil
+    }
+
+
+    // MARK: - 当前月份数据
+
+    private var monthTransactions:
+        [TransactionRecord] {
+
+        transactions.filter {
+            $0.date >= monthStart &&
+            $0.date < monthEnd
+        }
+    }
+
+
+    private var expenseTransactions:
+        [TransactionRecord] {
+
+        monthTransactions.filter {
+            $0.type == .expense ||
+            $0.type == .creditExpense
+        }
+    }
+
+
+    private var monthlyExpense:
+        Double {
+
+        expenseTransactions
+            .reduce(0) {
+                $0 + abs($1.amount)
+            }
+    }
+
+
+    private var monthlyIncome:
+        Double {
+
+        monthTransactions
+            .filter {
+                $0.type == .income
+            }
+            .reduce(0) {
+                $0 + abs($1.amount)
+            }
+    }
+
+
+    private var monthlyBalance:
+        Double {
+
+        monthlyIncome -
+        monthlyExpense
+    }
+
+
+    // MARK: - 环比 / 同比
+
+    private var previousMonthExpense:
+        Double {
+
+        amount(
+            type:
+                .expense,
+            secondaryType:
+                .creditExpense,
+            from:
+                previousMonthStart,
+            to:
+                previousMonthEnd
         )
     }
 
 
+    private var previousMonthIncome:
+        Double {
+
+        amount(
+            type:
+                .income,
+            secondaryType:
+                nil,
+            from:
+                previousMonthStart,
+            to:
+                previousMonthEnd
+        )
+    }
+
+
+    private var lastYearExpense:
+        Double {
+
+        amount(
+            type:
+                .expense,
+            secondaryType:
+                .creditExpense,
+            from:
+                lastYearMonthStart,
+            to:
+                lastYearMonthEnd
+        )
+    }
+
+
+    private var lastYearIncome:
+        Double {
+
+        amount(
+            type:
+                .income,
+            secondaryType:
+                nil,
+            from:
+                lastYearMonthStart,
+            to:
+                lastYearMonthEnd
+        )
+    }
+
+
+    private func amount(
+        type:
+            TransactionType,
+        secondaryType:
+            TransactionType?,
+        from start:
+            Date,
+        to end:
+            Date
+    ) -> Double {
+
+        transactions
+            .filter { transaction in
+
+                guard
+                    transaction.date >= start &&
+                    transaction.date < end
+                else {
+                    return false
+                }
+
+                if transaction.type ==
+                    type {
+
+                    return true
+                }
+
+                if let secondaryType {
+
+                    return
+                        transaction.type ==
+                        secondaryType
+                }
+
+                return false
+            }
+            .reduce(0) {
+                $0 + abs($1.amount)
+            }
+    }
+
+
+    private func comparisonText(
+        current:
+            Double,
+        previous:
+            Double,
+        prefix:
+            String
+    ) -> String {
+
+        guard previous > 0
+        else {
+
+            return
+                current > 0
+                ? "\(prefix)暂无基数"
+                : "\(prefix)暂无数据"
+        }
+
+        let percent =
+            (
+                current -
+                previous
+            ) /
+            previous *
+            100
+
+        let direction =
+            percent >= 0
+            ? "增加"
+            : "减少"
+
+        return
+            "\(prefix)\(direction) \(abs(percent).formatted(.number.precision(.fractionLength(1))))%"
+    }
+
+
+    // MARK: - 预算
+
+    private var budgetProgress:
+        Double {
+
+        guard monthlyBudget > 0
+        else {
+            return 0
+        }
+
+        return min(
+            monthlyExpense /
+            monthlyBudget,
+            1
+        )
+    }
+
+
+    private var rawBudgetProgress:
+        Double {
+
+        guard monthlyBudget > 0
+        else {
+            return 0
+        }
+
+        return
+            monthlyExpense /
+            monthlyBudget
+    }
+
+
+    private var budgetRemaining:
+        Double {
+
+        monthlyBudget -
+        monthlyExpense
+    }
+
+
+    private var budgetStatusText:
+        String? {
+
+        guard monthlyBudget > 0
+        else {
+            return nil
+        }
+
+        if rawBudgetProgress >= 1 {
+
+            return
+                "已超出预算 \(abs(budgetRemaining).formatted(.currency(code: "CNY")))"
+
+        } else if rawBudgetProgress >= 0.8 {
+
+            return
+                "预算已使用 \(Int(rawBudgetProgress * 100))%，建议控制本月后续支出"
+        }
+
+        return nil
+    }
+
+
+    // MARK: - 每日支出
+
     private var dailyExpensePoints:
         [DailyExpensePoint] {
-
-        let expenseTransactions =
-            currentMonthTransactions.filter {
-                $0.type == .expense ||
-                $0.type == .creditExpense
-            }
 
         let grouped =
             Dictionary(
@@ -162,7 +477,8 @@ struct StatisticsView: View {
             ) { transaction in
 
                 AppTime.calendar.startOfDay(
-                    for: transaction.date
+                    for:
+                        transaction.date
                 )
             }
 
@@ -170,7 +486,8 @@ struct StatisticsView: View {
             .map { date, records in
 
                 DailyExpensePoint(
-                    date: date,
+                    date:
+                        date,
                     amount:
                         records.reduce(0) {
                             $0 + abs($1.amount)
@@ -178,25 +495,90 @@ struct StatisticsView: View {
                 )
             }
             .sorted {
-                $0.date < $1.date
+                $0.date <
+                $1.date
             }
     }
 
 
+    private var selectedDayTransactions:
+        [TransactionRecord] {
+
+        guard let selectedDay
+        else {
+            return []
+        }
+
+        return expenseTransactions
+            .filter {
+
+                AppTime.calendar.isDate(
+                    $0.date,
+                    inSameDayAs:
+                        selectedDay
+                )
+            }
+            .sorted {
+                $0.date >
+                $1.date
+            }
+    }
+
+
+    private var selectedDayAmount:
+        Double {
+
+        selectedDayTransactions
+            .reduce(0) {
+                $0 + abs($1.amount)
+            }
+    }
+
+
+    private var selectedDayTitle:
+        String {
+
+        guard let selectedDay
+        else {
+            return ""
+        }
+
+        let formatter =
+            DateFormatter()
+
+        formatter.calendar =
+            AppTime.calendar
+
+        formatter.timeZone =
+            AppTime.timeZone
+
+        formatter.locale =
+            Locale(
+                identifier:
+                    "zh_CN"
+            )
+
+        formatter.dateFormat =
+            "M月d日"
+
+        return formatter.string(
+            from:
+                selectedDay
+        )
+    }
+
+
+    // MARK: - 分类
+
     private var categoryExpensePoints:
         [CategoryExpensePoint] {
-
-        let expenseTransactions =
-            currentMonthTransactions.filter {
-                $0.type == .expense ||
-                $0.type == .creditExpense
-            }
 
         let grouped =
             Dictionary(
                 grouping:
                     expenseTransactions
             ) {
+
                 $0.category.isEmpty
                 ? "未分类"
                 : $0.category
@@ -215,81 +597,101 @@ struct StatisticsView: View {
                 )
             }
             .sorted {
-                $0.amount > $1.amount
+                $0.amount >
+                $1.amount
             }
     }
 
 
+    // MARK: - 趋势
+
     private var sixMonthFlowPoints:
         [MonthlyFlowPoint] {
 
-        guard let firstMonth =
+        guard
+            let firstMonth =
                 AppTime.calendar.date(
-                    byAdding: .month,
-                    value: -5,
-                    to: monthStart
+                    byAdding:
+                        .month,
+                    value:
+                        -5,
+                    to:
+                        monthStart
                 )
         else {
             return []
         }
 
-        return (0..<6).flatMap { offset -> [MonthlyFlowPoint] in
+        return (0..<6)
+            .flatMap { offset -> [MonthlyFlowPoint] in
 
-            guard
-                let start =
-                    AppTime.calendar.date(
-                        byAdding: .month,
-                        value: offset,
-                        to: firstMonth
-                    ),
-                let end =
-                    AppTime.calendar.date(
-                        byAdding: .month,
-                        value: 1,
-                        to: start
-                    )
-            else {
-                return []
-            }
-
-            let records =
-                transactions.filter {
-                    $0.date >= start &&
-                    $0.date < end
+                guard
+                    let start =
+                        AppTime.calendar.date(
+                            byAdding:
+                                .month,
+                            value:
+                                offset,
+                            to:
+                                firstMonth
+                        ),
+                    let end =
+                        AppTime.calendar.date(
+                            byAdding:
+                                .month,
+                            value:
+                                1,
+                            to:
+                                start
+                        )
+                else {
+                    return []
                 }
 
-            let expense =
-                records
-                    .filter {
-                        $0.type == .expense ||
-                        $0.type == .creditExpense
-                    }
-                    .reduce(0) {
-                        $0 + abs($1.amount)
+                let records =
+                    transactions.filter {
+                        $0.date >= start &&
+                        $0.date < end
                     }
 
-            let income =
-                records
-                    .filter {
-                        $0.type == .income
-                    }
-                    .reduce(0) {
-                        $0 + abs($1.amount)
-                    }
+                let expense =
+                    records
+                        .filter {
+                            $0.type == .expense ||
+                            $0.type == .creditExpense
+                        }
+                        .reduce(0) {
+                            $0 + abs($1.amount)
+                        }
 
-            return [
-                MonthlyFlowPoint(
-                    month: start,
-                    type: "支出",
-                    amount: expense
-                ),
-                MonthlyFlowPoint(
-                    month: start,
-                    type: "收入",
-                    amount: income
-                )
-            ]
-        }
+                let income =
+                    records
+                        .filter {
+                            $0.type == .income
+                        }
+                        .reduce(0) {
+                            $0 + abs($1.amount)
+                        }
+
+                return [
+                    MonthlyFlowPoint(
+                        month:
+                            start,
+                        type:
+                            "支出",
+                        amount:
+                            expense
+                    ),
+                    MonthlyFlowPoint(
+                        month:
+                            start,
+                        type:
+                            "收入",
+                        amount:
+                            income
+                    )
+                ]
+            }
     }
 
 
@@ -302,7 +704,11 @@ struct StatisticsView: View {
                 spacing: 22
             ) {
 
+                monthSelector
+
                 monthSummaryCard
+
+                comparisonSection
 
                 budgetCard
 
@@ -311,6 +717,8 @@ struct StatisticsView: View {
                 categorySection
 
                 sixMonthSection
+
+                monthBillEntry
             }
             .padding()
         }
@@ -333,6 +741,102 @@ struct StatisticsView: View {
     }
 
 
+    // MARK: - 月份切换
+
+    private var monthSelector:
+        some View {
+
+        HStack(
+            spacing: 14
+        ) {
+
+            Button {
+
+                moveMonth(
+                    by: -1
+                )
+
+            } label: {
+
+                Image(
+                    systemName:
+                        "chevron.left"
+                )
+                .frame(
+                    width: 34,
+                    height: 34
+                )
+            }
+            .buttonStyle(
+                .bordered
+            )
+
+
+            Spacer()
+
+
+            VStack(
+                spacing: 3
+            ) {
+
+                Text(
+                    monthTitle
+                )
+                .font(
+                    .headline
+                )
+
+                if !isCurrentMonth {
+
+                    Button(
+                        "回到本月"
+                    ) {
+
+                        selectedMonth =
+                            currentMonthStart
+
+                        selectedDay =
+                            nil
+                    }
+                    .font(
+                        .caption
+                    )
+                }
+            }
+
+
+            Spacer()
+
+
+            Button {
+
+                moveMonth(
+                    by: 1
+                )
+
+            } label: {
+
+                Image(
+                    systemName:
+                        "chevron.right"
+                )
+                .frame(
+                    width: 34,
+                    height: 34
+                )
+            }
+            .buttonStyle(
+                .bordered
+            )
+            .disabled(
+                !canGoNextMonth
+            )
+        }
+    }
+
+
+    // MARK: - 月度摘要
+
     private var monthSummaryCard:
         some View {
 
@@ -341,12 +845,27 @@ struct StatisticsView: View {
             spacing: 16
         ) {
 
-            Text(
-                currentMonthTitle
-            )
-            .font(
-                .headline
-            )
+            HStack {
+
+                Text(
+                    monthTitle
+                )
+                .font(
+                    .headline
+                )
+
+                Spacer()
+
+                Text(
+                    "\(monthTransactions.count) 笔"
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
 
 
             HStack(
@@ -354,15 +873,19 @@ struct StatisticsView: View {
             ) {
 
                 metricCard(
-                    title: "支出",
-                    value: monthlyExpense,
+                    title:
+                        "支出",
+                    value:
+                        monthlyExpense,
                     icon:
                         "arrow.up.right"
                 )
 
                 metricCard(
-                    title: "收入",
-                    value: monthlyIncome,
+                    title:
+                        "收入",
+                    value:
+                        monthlyIncome,
                     icon:
                         "arrow.down.left"
                 )
@@ -384,7 +907,8 @@ struct StatisticsView: View {
                     monthlyBalance,
                     format:
                         .currency(
-                            code: "CNY"
+                            code:
+                                "CNY"
                         )
                 )
                 .fontWeight(
@@ -401,16 +925,20 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
 
     private func metricCard(
-        title: String,
-        value: Double,
-        icon: String
+        title:
+            String,
+        value:
+            Double,
+        icon:
+            String
     ) -> some View {
 
         VStack(
@@ -420,7 +948,8 @@ struct StatisticsView: View {
 
             Label(
                 title,
-                systemImage: icon
+                systemImage:
+                    icon
             )
             .font(
                 .caption
@@ -433,7 +962,8 @@ struct StatisticsView: View {
                 value,
                 format:
                     .currency(
-                        code: "CNY"
+                        code:
+                            "CNY"
                     )
             )
             .font(
@@ -445,8 +975,10 @@ struct StatisticsView: View {
             )
         }
         .frame(
-            maxWidth: .infinity,
-            alignment: .leading
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
         )
         .padding(14)
         .background(
@@ -457,11 +989,151 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 16,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
+
+    // MARK: - 环比同比
+
+    private var comparisonSection:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 14
+        ) {
+
+            Text(
+                "收支对比"
+            )
+            .font(
+                .title3.bold()
+            )
+
+
+            comparisonRow(
+                title:
+                    "支出",
+                current:
+                    monthlyExpense,
+                previous:
+                    previousMonthExpense,
+                lastYear:
+                    lastYearExpense
+            )
+
+            Divider()
+
+            comparisonRow(
+                title:
+                    "收入",
+                current:
+                    monthlyIncome,
+                previous:
+                    previousMonthIncome,
+                lastYear:
+                    lastYearIncome
+            )
+        }
+        .padding()
+        .background(
+            Color(
+                .secondarySystemBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: 20,
+                style:
+                    .continuous
+            )
+        )
+    }
+
+
+    private func comparisonRow(
+        title:
+            String,
+        current:
+            Double,
+        previous:
+            Double,
+        lastYear:
+            Double
+    ) -> some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 7
+        ) {
+
+            HStack {
+
+                Text(
+                    title
+                )
+                .fontWeight(
+                    .medium
+                )
+
+                Spacer()
+
+                Text(
+                    current,
+                    format:
+                        .currency(
+                            code:
+                                "CNY"
+                        )
+                )
+                .fontWeight(
+                    .semibold
+                )
+            }
+
+
+            Text(
+                comparisonText(
+                    current:
+                        current,
+                    previous:
+                        previous,
+                    prefix:
+                        "环比"
+                )
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+
+
+            Text(
+                comparisonText(
+                    current:
+                        current,
+                    previous:
+                        lastYear,
+                    prefix:
+                        "同比"
+                )
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+        }
+    }
+
+
+    // MARK: - 预算
 
     private var budgetCard:
         some View {
@@ -526,7 +1198,8 @@ struct StatisticsView: View {
                             monthlyExpense,
                             format:
                                 .currency(
-                                    code: "CNY"
+                                    code:
+                                        "CNY"
                                 )
                         )
                         .fontWeight(
@@ -561,13 +1234,34 @@ struct StatisticsView: View {
                             ),
                             format:
                                 .currency(
-                                    code: "CNY"
+                                    code:
+                                        "CNY"
                                 )
                         )
                         .fontWeight(
                             .semibold
                         )
                     }
+                }
+
+
+                if let budgetStatusText {
+
+                    Label(
+                        budgetStatusText,
+                        systemImage:
+                            rawBudgetProgress >= 1
+                            ? "exclamationmark.triangle.fill"
+                            : "exclamationmark.circle.fill"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        rawBudgetProgress >= 1
+                        ? .red
+                        : .orange
+                    )
                 }
 
 
@@ -584,7 +1278,7 @@ struct StatisticsView: View {
             } else {
 
                 Text(
-                    "设置一个月度支出预算后，可以在首页和统计页随时查看使用进度。"
+                    "设置月度支出预算后，可以查看预算使用进度和超支提醒。"
                 )
                 .font(
                     .subheadline
@@ -603,11 +1297,14 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
+
+    // MARK: - 每日支出
 
     private var dailyExpenseSection:
         some View {
@@ -617,41 +1314,81 @@ struct StatisticsView: View {
             spacing: 12
         ) {
 
-            Text(
-                "本月每日支出"
-            )
-            .font(
-                .title3.bold()
-            )
+            HStack {
+
+                Text(
+                    "每日支出"
+                )
+                .font(
+                    .title3.bold()
+                )
+
+                Spacer()
+
+                if selectedDay != nil {
+
+                    Button(
+                        "取消选择"
+                    ) {
+
+                        selectedDay =
+                            nil
+                    }
+                    .font(
+                        .caption
+                    )
+                }
+            }
 
 
             if dailyExpensePoints.isEmpty {
 
                 emptyChart(
                     text:
-                        "本月还没有支出记录"
+                        "这个月还没有支出记录"
                 )
 
             } else {
 
-                Chart(
-                    dailyExpensePoints
-                ) { point in
+                Chart {
 
-                    BarMark(
-                        x:
-                            .value(
-                                "日期",
-                                point.date,
-                                unit: .day
-                            ),
-                        y:
-                            .value(
-                                "支出",
-                                point.amount
-                            )
-                    )
-                    .cornerRadius(4)
+                    ForEach(
+                        dailyExpensePoints
+                    ) { point in
+
+                        BarMark(
+                            x:
+                                .value(
+                                    "日期",
+                                    point.date,
+                                    unit:
+                                        .day
+                                ),
+                            y:
+                                .value(
+                                    "支出",
+                                    point.amount
+                                )
+                        )
+                        .cornerRadius(4)
+                    }
+
+
+                    if let selectedDay {
+
+                        RuleMark(
+                            x:
+                                .value(
+                                    "选择日期",
+                                    selectedDay,
+                                    unit:
+                                        .day
+                                )
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
                 }
                 .frame(
                     height: 210
@@ -664,7 +1401,7 @@ struct StatisticsView: View {
                                 by: .day,
                                 count: 5
                             )
-                    ) { value in
+                    ) { _ in
 
                         AxisGridLine()
 
@@ -675,6 +1412,16 @@ struct StatisticsView: View {
                                 .dateTime.day()
                         )
                     }
+                }
+                .chartXSelection(
+                    value:
+                        $selectedDay
+                )
+
+
+                if selectedDay != nil {
+
+                    selectedDayDetail
                 }
             }
         }
@@ -687,11 +1434,91 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
+
+    private var selectedDayDetail:
+        some View {
+
+        VStack(
+            alignment: .leading,
+            spacing: 10
+        ) {
+
+            Divider()
+
+
+            HStack {
+
+                Text(
+                    selectedDayTitle
+                )
+                .fontWeight(
+                    .medium
+                )
+
+                Spacer()
+
+                Text(
+                    selectedDayAmount,
+                    format:
+                        .currency(
+                            code:
+                                "CNY"
+                        )
+                )
+                .fontWeight(
+                    .semibold
+                )
+            }
+
+
+            if selectedDayTransactions.isEmpty {
+
+                Text(
+                    "这一天没有支出账单"
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+            } else {
+
+                ForEach(
+                    selectedDayTransactions
+                        .prefix(5)
+                ) { transaction in
+
+                    NavigationLink {
+
+                        TransactionDetailView(
+                            transaction:
+                                transaction
+                        )
+
+                    } label: {
+
+                        compactTransactionRow(
+                            transaction
+                        )
+                    }
+                    .buttonStyle(
+                        .plain
+                    )
+                }
+            }
+        }
+    }
+
+
+    // MARK: - 分类
 
     private var categorySection:
         some View {
@@ -730,7 +1557,8 @@ struct StatisticsView: View {
                             ),
                         innerRadius:
                             .ratio(0.60),
-                        angularInset: 2
+                        angularInset:
+                            2
                     )
                     .foregroundStyle(
                         by:
@@ -744,44 +1572,98 @@ struct StatisticsView: View {
                     height: 220
                 )
                 .chartLegend(
-                    position: .bottom,
-                    alignment: .leading,
-                    spacing: 8
+                    position:
+                        .bottom,
+                    alignment:
+                        .leading,
+                    spacing:
+                        8
                 )
 
 
                 VStack(
-                    spacing: 10
+                    spacing: 2
                 ) {
 
                     ForEach(
-                        Array(
-                            categoryExpensePoints
-                                .prefix(5)
-                        )
+                        categoryExpensePoints
                     ) { point in
 
-                        HStack {
+                        NavigationLink {
 
-                            Text(
-                                point.category
+                            CategoryTransactionsView(
+                                category:
+                                    point.category,
+                                monthStart:
+                                    monthStart,
+                                monthEnd:
+                                    monthEnd
                             )
 
-                            Spacer()
+                        } label: {
 
-                            Text(
-                                point.amount,
-                                format:
-                                    .currency(
-                                        code: "CNY"
+                            HStack {
+
+                                VStack(
+                                    alignment:
+                                        .leading,
+                                    spacing: 2
+                                ) {
+
+                                    Text(
+                                        point.category
                                     )
-                            )
-                            .fontWeight(
-                                .medium
+
+                                    if monthlyExpense >
+                                        0 {
+
+                                        Text(
+                                            "\(point.amount / monthlyExpense * 100, format: .number.precision(.fractionLength(1)))%"
+                                        )
+                                        .font(
+                                            .caption2
+                                        )
+                                        .foregroundStyle(
+                                            .secondary
+                                        )
+                                    }
+                                }
+
+
+                                Spacer()
+
+
+                                Text(
+                                    point.amount,
+                                    format:
+                                        .currency(
+                                            code:
+                                                "CNY"
+                                        )
+                                )
+                                .fontWeight(
+                                    .medium
+                                )
+
+
+                                Image(
+                                    systemName:
+                                        "chevron.right"
+                                )
+                                .font(
+                                    .caption2.bold()
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+                            }
+                            .padding(
+                                .vertical,
+                                7
                             )
                         }
-                        .font(
-                            .subheadline
+                        .buttonStyle(
+                            .plain
                         )
                     }
                 }
@@ -796,11 +1678,14 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
+
+    // MARK: - 六个月趋势
 
     private var sixMonthSection:
         some View {
@@ -811,7 +1696,7 @@ struct StatisticsView: View {
         ) {
 
             Text(
-                "近 6 个月收支"
+                "截至所选月份近 6 个月收支"
             )
             .font(
                 .title3.bold()
@@ -827,7 +1712,8 @@ struct StatisticsView: View {
                         .value(
                             "月份",
                             point.month,
-                            unit: .month
+                            unit:
+                                .month
                         ),
                     y:
                         .value(
@@ -861,7 +1747,7 @@ struct StatisticsView: View {
                             by: .month,
                             count: 1
                         )
-                ) { value in
+                ) { _ in
 
                     AxisGridLine()
 
@@ -874,8 +1760,10 @@ struct StatisticsView: View {
                 }
             }
             .chartLegend(
-                position: .bottom,
-                alignment: .leading
+                position:
+                    .bottom,
+                alignment:
+                    .leading
             )
         }
         .padding()
@@ -887,14 +1775,162 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
-                style: .continuous
+                style:
+                    .continuous
             )
         )
     }
 
 
+    // MARK: - 月度账单入口
+
+    private var monthBillEntry:
+        some View {
+
+        NavigationLink {
+
+            MonthTransactionsView(
+                monthStart:
+                    monthStart,
+                monthEnd:
+                    monthEnd,
+                title:
+                    monthTitle
+            )
+
+        } label: {
+
+            HStack {
+
+                Label(
+                    "查看 \(monthTitle) 全部账单",
+                    systemImage:
+                        "list.bullet.rectangle"
+                )
+
+                Spacer()
+
+                Text(
+                    "\(monthTransactions.count) 笔"
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+                Image(
+                    systemName:
+                        "chevron.right"
+                )
+                .font(
+                    .caption.bold()
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+            .padding()
+            .background(
+                Color(
+                    .secondarySystemBackground
+                )
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 18,
+                    style:
+                        .continuous
+                )
+            )
+        }
+        .buttonStyle(
+            .plain
+        )
+    }
+
+
+    private func compactTransactionRow(
+        _ transaction:
+            TransactionRecord
+    ) -> some View {
+
+        HStack(
+            spacing: 10
+        ) {
+
+            Image(
+                systemName:
+                    transaction.type.icon
+            )
+            .frame(
+                width: 28,
+                height: 28
+            )
+            .background(
+                Color(
+                    .tertiarySystemBackground
+                )
+            )
+            .clipShape(
+                Circle()
+            )
+
+
+            VStack(
+                alignment: .leading,
+                spacing: 2
+            ) {
+
+                Text(
+                    transaction.category.isEmpty
+                    ? transaction.type.rawValue
+                    : transaction.category
+                )
+                .font(
+                    .subheadline
+                )
+
+                Text(
+                    AppTime.listDateTime(
+                        transaction.date
+                    )
+                )
+                .font(
+                    .caption2
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+
+            Spacer()
+
+
+            Text(
+                abs(
+                    transaction.amount
+                ),
+                format:
+                    .currency(
+                        code:
+                            "CNY"
+                    )
+            )
+            .font(
+                .subheadline.weight(
+                    .medium
+                )
+            )
+        }
+        .contentShape(
+            Rectangle()
+        )
+    }
+
+
     private func emptyChart(
-        text: String
+        text:
+            String
     ) -> some View {
 
         VStack(
@@ -909,29 +1945,358 @@ struct StatisticsView: View {
                 .title2
             )
 
-            Text(text)
-                .font(
-                    .subheadline
-                )
+            Text(
+                text
+            )
+            .font(
+                .subheadline
+            )
         }
         .foregroundStyle(
             .secondary
         )
         .frame(
-            maxWidth: .infinity,
-            minHeight: 150
+            maxWidth:
+                .infinity,
+            minHeight:
+                150
         )
     }
 }
 
 
+// MARK: - 分类账单
+
+private struct CategoryTransactionsView: View {
+
+    let category:
+        String
+
+    let monthStart:
+        Date
+
+    let monthEnd:
+        Date
+
+    @Query(
+        sort:
+            \TransactionRecord.date,
+        order:
+            .reverse
+    )
+    private var transactions:
+        [TransactionRecord]
+
+
+    private var filteredTransactions:
+        [TransactionRecord] {
+
+        transactions.filter {
+
+            let transactionCategory =
+                $0.category.isEmpty
+                ? "未分类"
+                : $0.category
+
+            return
+                $0.date >= monthStart &&
+                $0.date < monthEnd &&
+                (
+                    $0.type == .expense ||
+                    $0.type == .creditExpense
+                ) &&
+                transactionCategory ==
+                category
+        }
+    }
+
+
+    private var total:
+        Double {
+
+        filteredTransactions
+            .reduce(0) {
+                $0 + abs($1.amount)
+            }
+    }
+
+
+    var body: some View {
+
+        List {
+
+            Section {
+
+                LabeledContent(
+                    "分类合计"
+                ) {
+
+                    Text(
+                        total,
+                        format:
+                            .currency(
+                                code:
+                                    "CNY"
+                            )
+                    )
+                    .fontWeight(
+                        .semibold
+                    )
+                }
+
+                LabeledContent(
+                    "账单数量",
+                    value:
+                        "\(filteredTransactions.count) 笔"
+                )
+            }
+
+
+            Section(
+                "账单"
+            ) {
+
+                if filteredTransactions.isEmpty {
+
+                    Text(
+                        "暂无账单"
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                } else {
+
+                    ForEach(
+                        filteredTransactions
+                    ) { transaction in
+
+                        NavigationLink {
+
+                            TransactionDetailView(
+                                transaction:
+                                    transaction
+                            )
+
+                        } label: {
+
+                            StatisticsTransactionRow(
+                                transaction:
+                                    transaction
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(
+            category
+        )
+        .navigationBarTitleDisplayMode(
+            .inline
+        )
+    }
+}
+
+
+// MARK: - 月度全部账单
+
+private struct MonthTransactionsView: View {
+
+    let monthStart:
+        Date
+
+    let monthEnd:
+        Date
+
+    let title:
+        String
+
+    @Query(
+        sort:
+            \TransactionRecord.date,
+        order:
+            .reverse
+    )
+    private var transactions:
+        [TransactionRecord]
+
+
+    private var filteredTransactions:
+        [TransactionRecord] {
+
+        transactions.filter {
+            $0.date >= monthStart &&
+            $0.date < monthEnd
+        }
+    }
+
+
+    var body: some View {
+
+        List {
+
+            if filteredTransactions.isEmpty {
+
+                Text(
+                    "这个月还没有账单"
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+            } else {
+
+                ForEach(
+                    filteredTransactions
+                ) { transaction in
+
+                    NavigationLink {
+
+                        TransactionDetailView(
+                            transaction:
+                                transaction
+                        )
+
+                    } label: {
+
+                        StatisticsTransactionRow(
+                            transaction:
+                                transaction
+                        )
+                    }
+                }
+            }
+        }
+        .navigationTitle(
+            title
+        )
+        .navigationBarTitleDisplayMode(
+            .inline
+        )
+    }
+}
+
+
+// MARK: - 统计页账单行
+
+private struct StatisticsTransactionRow: View {
+
+    let transaction:
+        TransactionRecord
+
+
+    var body: some View {
+
+        HStack(
+            spacing: 12
+        ) {
+
+            Image(
+                systemName:
+                    transaction.type.icon
+            )
+            .frame(
+                width: 32,
+                height: 32
+            )
+            .background(
+                Color(
+                    .secondarySystemBackground
+                )
+            )
+            .clipShape(
+                Circle()
+            )
+
+
+            VStack(
+                alignment: .leading,
+                spacing: 3
+            ) {
+
+                Text(
+                    transaction.category.isEmpty
+                    ? transaction.type.rawValue
+                    : transaction.category
+                )
+
+                Text(
+                    AppTime.listDateTime(
+                        transaction.date
+                    )
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+
+            Spacer()
+
+
+            Text(
+                signedAmountText
+            )
+            .fontWeight(
+                .medium
+            )
+        }
+    }
+
+
+    private var signedAmountText:
+        String {
+
+        let amount =
+            abs(
+                transaction.amount
+            )
+            .formatted(
+                .currency(
+                    code:
+                        "CNY"
+                )
+            )
+
+        switch transaction.type {
+
+        case .income:
+
+            return "+\(amount)"
+
+        case .expense,
+             .creditExpense:
+
+            return "-\(amount)"
+
+        case .transfer,
+             .creditPayment,
+             .adjustment:
+
+            return amount
+        }
+    }
+}
+
+
+// MARK: - 图表数据
+
 private struct DailyExpensePoint:
     Identifiable {
 
-    let date: Date
-    let amount: Double
+    let date:
+        Date
 
-    var id: Date {
+    let amount:
+        Double
+
+    var id:
+        Date {
+
         date
     }
 }
@@ -940,10 +2305,15 @@ private struct DailyExpensePoint:
 private struct CategoryExpensePoint:
     Identifiable {
 
-    let category: String
-    let amount: Double
+    let category:
+        String
 
-    var id: String {
+    let amount:
+        Double
+
+    var id:
+        String {
+
         category
     }
 }
@@ -952,19 +2322,30 @@ private struct CategoryExpensePoint:
 private struct MonthlyFlowPoint:
     Identifiable {
 
-    let month: Date
-    let type: String
-    let amount: Double
+    let month:
+        Date
 
-    var id: String {
+    let type:
+        String
+
+    let amount:
+        Double
+
+    var id:
+        String {
+
         "\(month.timeIntervalSince1970)-\(type)"
     }
 }
 
 
+// MARK: - 预算编辑
+
 private struct BudgetEditorView: View {
 
-    @Environment(\.dismiss)
+    @Environment(
+        \.dismiss
+    )
     private var dismiss
 
     @Binding
@@ -993,8 +2374,10 @@ private struct BudgetEditorView: View {
                 initialValue:
                     monthlyBudget.wrappedValue > 0
                     ? String(
-                        format: "%.2f",
-                        monthlyBudget.wrappedValue
+                        format:
+                            "%.2f",
+                        monthlyBudget
+                            .wrappedValue
                     )
                     : ""
             )
@@ -1013,10 +2396,12 @@ private struct BudgetEditorView: View {
 
                     HStack {
 
-                        Text("¥")
-                            .foregroundStyle(
-                                .secondary
-                            )
+                        Text(
+                            "¥"
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
 
                         TextField(
                             "例如 5000",
@@ -1039,10 +2424,12 @@ private struct BudgetEditorView: View {
 
                         Button(
                             "清除预算",
-                            role: .destructive
+                            role:
+                                .destructive
                         ) {
 
-                            monthlyBudget = 0
+                            monthlyBudget =
+                                0
 
                             dismiss()
                         }
@@ -1083,8 +2470,12 @@ private struct BudgetEditorView: View {
                         save()
                     }
                     .disabled(
-                        parsedAmount == nil ||
-                        (parsedAmount ?? 0) <= 0
+                        parsedAmount ==
+                            nil ||
+                        (
+                            parsedAmount
+                            ?? 0
+                        ) <= 0
                     )
                 }
 
@@ -1123,8 +2514,10 @@ private struct BudgetEditorView: View {
         let cleaned =
             amountText
                 .replacingOccurrences(
-                    of: ",",
-                    with: "."
+                    of:
+                        ",",
+                    with:
+                        "."
                 )
                 .trimmingCharacters(
                     in:

@@ -129,6 +129,43 @@ struct HomeView: View {
     }
 
 
+    private var rawBudgetProgress:
+        Double {
+
+        guard monthlyBudget > 0
+        else {
+            return 0
+        }
+
+        return
+            monthlyExpense /
+            monthlyBudget
+    }
+
+
+    private var budgetStatusText:
+        String? {
+
+        guard monthlyBudget > 0
+        else {
+            return nil
+        }
+
+        if rawBudgetProgress >= 1 {
+
+            return
+                "本月已超预算 \(abs(monthlyBudget - monthlyExpense).formatted(.currency(code: "CNY")))"
+
+        } else if rawBudgetProgress >= 0.8 {
+
+            return
+                "预算已使用 \(Int(rawBudgetProgress * 100))%"
+        }
+
+        return nil
+    }
+
+
     var body: some View {
 
         ScrollView {
@@ -433,6 +470,26 @@ struct HomeView: View {
                     .foregroundStyle(
                         .secondary
                     )
+
+
+                    if let budgetStatusText {
+
+                        Label(
+                            budgetStatusText,
+                            systemImage:
+                                rawBudgetProgress >= 1
+                                ? "exclamationmark.triangle.fill"
+                                : "exclamationmark.circle.fill"
+                        )
+                        .font(
+                            .caption2
+                        )
+                        .foregroundStyle(
+                            rawBudgetProgress >= 1
+                            ? .red
+                            : .orange
+                        )
+                    }
 
                 } else {
 
