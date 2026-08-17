@@ -1234,6 +1234,8 @@ struct AddCardView: View {
     private enum CardNumberField:
         Hashable {
 
+        case bankName
+        case holderName
         case lastFour
         case creditLimit
         case currentDebt
@@ -1321,6 +1323,18 @@ struct AddCardView: View {
                         text:
                             $holderName
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .holderName
+                    )
+                    .submitLabel(
+                        .done
+                    )
+                    .onSubmit {
+                        focusedField =
+                            nil
+                    }
                 }
 
 
@@ -2353,6 +2367,8 @@ struct EditCardView: View {
     private enum EditCardNumberField:
         Hashable {
 
+        case bankName
+        case holderName
         case lastFour
         case creditLimit
         case currentDebt
@@ -2555,6 +2571,18 @@ struct EditCardView: View {
                         text:
                             $holderName
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .holderName
+                    )
+                    .submitLabel(
+                        .done
+                    )
+                    .onSubmit {
+                        focusedField =
+                            nil
+                    }
                 }
 
 
