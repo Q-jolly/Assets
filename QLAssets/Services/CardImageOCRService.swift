@@ -54,120 +54,114 @@ enum CardImageOCRService {
     ) async throws
         -> BankCardOCRResult {
 
-        try await Task.detached(
-            priority:
-                .userInitiated
-        ) {
+        guard
+            let image =
+                UIImage(
+                    data:
+                        imageData
+                ),
+            let cgImage =
+                image.cgImage
+        else {
 
-            guard
-                let image =
-                    UIImage(
-                        data:
-                            imageData
-                    ),
-                let cgImage =
-                    image.cgImage
-            else {
-
-                throw RecognitionError
-                    .invalidImage
-            }
-
-
-            let request =
-                VNRecognizeTextRequest()
-
-            request.recognitionLevel =
-                .accurate
-
-            request.usesLanguageCorrection =
-                true
-
-            request.recognitionLanguages =
-                [
-                    "zh-Hans",
-                    "en-US"
-                ]
-
-            request.minimumTextHeight =
-                0.012
-
-
-            let handler =
-                VNImageRequestHandler(
-                    cgImage:
-                        cgImage,
-                    orientation:
-                        cgImageOrientation(
-                            for:
-                                image.imageOrientation
-                        ),
-                    options:
-                        [:]
-                )
-
-
-            try handler.perform(
-                [request]
-            )
-
-
-            let observations =
-                request.results
-
-
-            let lines =
-                observations.compactMap {
-                    $0.topCandidates(1)
-                        .first?
-                        .string
-                }
-
-
-            guard !lines.isEmpty
-            else {
-
-                throw RecognitionError
-                    .visionFailed
-            }
-
-
-            let fullText =
-                lines.joined(
-                    separator:
-                        "\n"
-                )
-
-
-            let cardNumber =
-                findBestCardNumber(
-                    in:
-                        lines
-                )
-
-
-            return BankCardOCRResult(
-                bankName:
-                    detectBankName(
-                        in:
-                            fullText
-                    ),
-                lastFourDigits:
-                    cardNumber.map {
-                        String(
-                            $0.suffix(4)
-                        )
-                    },
-                cardType:
-                    detectCardType(
-                        in:
-                            fullText
-                    ),
-                recognizedText:
-                    fullText
-            )
+            throw RecognitionError
+                .invalidImage
         }
-        .value
+
+
+        let request =
+            VNRecognizeTextRequest()
+
+        request.recognitionLevel =
+            .accurate
+
+        request.usesLanguageCorrection =
+            true
+
+        request.recognitionLanguages =
+            [
+                "zh-Hans",
+                "en-US"
+            ]
+
+        request.minimumTextHeight =
+            0.012
+
+
+        let handler =
+            VNImageRequestHandler(
+                cgImage:
+                    cgImage,
+                orientation:
+                    cgImageOrientation(
+                        for:
+                            image.imageOrientation
+                    ),
+                options:
+                    [:]
+            )
+
+
+        try handler.perform(
+            [request]
+        )
+
+
+        let observations =
+            request.results
+            ?? []
+
+
+        let lines =
+            observations.compactMap {
+                $0.topCandidates(1)
+                    .first?
+                    .string
+            }
+
+
+        guard !lines.isEmpty
+        else {
+
+            throw RecognitionError
+                .visionFailed
+        }
+
+
+        let fullText =
+            lines.joined(
+                separator:
+                    "\n"
+            )
+
+
+        let cardNumber =
+            findBestCardNumber(
+                in:
+                    lines
+            )
+
+
+        return BankCardOCRResult(
+            bankName:
+                detectBankName(
+                    in:
+                        fullText
+                ),
+            lastFourDigits:
+                cardNumber.map {
+                    String(
+                        $0.suffix(4)
+                    )
+                },
+            cardType:
+                detectCardType(
+                    in:
+                        fullText
+                ),
+            recognizedText:
+                fullText
+        )
     }
 
 
