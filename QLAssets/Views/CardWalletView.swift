@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Foundation
+import PhotosUI
 
 
 // MARK: - 卡包首页
@@ -1840,6 +1841,18 @@ struct AddCardView: View {
     private var repaymentDay =
         20
 
+    @State
+    private var selectedCardImage:
+        PhotosPickerItem?
+
+    @State
+    private var isRecognizingCard =
+        false
+
+    @State
+    private var recognitionMessage:
+        String?
+
     @FocusState
     private var focusedField:
         CardNumberField?
@@ -1863,6 +1876,9 @@ struct AddCardView: View {
             Form {
 
                 previewSection
+
+
+                cardRecognitionSection
 
 
                 Section(
@@ -2019,6 +2035,22 @@ struct AddCardView: View {
             .scrollDismissesKeyboard(
                 .interactively
             )
+            .onChange(
+                of: selectedCardImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await recognizeCardImage(
+                        newItem
+                    )
+                }
+            }
             .navigationTitle(
                 "添加银行卡"
             )
@@ -2094,6 +2126,195 @@ struct AddCardView: View {
                         ""
                 }
             }
+        }
+    }
+
+
+    private var cardRecognitionSection:
+        some View {
+
+        Section {
+
+            PhotosPicker(
+                selection:
+                    $selectedCardImage,
+                matching:
+                    .images
+            ) {
+
+                HStack {
+
+                    Label(
+                        isRecognizingCard
+                        ? "正在识别银行卡..."
+                        : "从银行卡图片识别",
+                        systemImage:
+                            isRecognizingCard
+                            ? "hourglass"
+                            : "viewfinder"
+                    )
+
+                    Spacer()
+
+                    if isRecognizingCard {
+
+                        ProgressView()
+                            .controlSize(
+                                .small
+                            )
+                    }
+                }
+            }
+            .disabled(
+                isRecognizingCard
+            )
+
+
+            if let recognitionMessage {
+
+                Text(
+                    recognitionMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "智能识别"
+            )
+
+        } footer: {
+
+            Text(
+                "选择银行卡照片或截图后，会在本机识别银行名称、卡号后四位和卡片类型。不会上传图片。"
+            )
+        }
+    }
+
+
+    @MainActor
+    private func recognizeCardImage(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        focusedField =
+            nil
+
+        isRecognizingCard =
+            true
+
+        recognitionMessage =
+            "正在读取图片..."
+
+        defer {
+
+            isRecognizingCard =
+                false
+
+            selectedCardImage =
+                nil
+        }
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    )
+            else {
+
+                recognitionMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            let result =
+                try await CardImageOCRService
+                    .recognize(
+                        imageData:
+                            data
+                    )
+
+
+            if let detectedBankName =
+                result.bankName {
+
+                bankName =
+                    detectedBankName
+            }
+
+
+            if let detectedLastFour =
+                result.lastFourDigits {
+
+                lastFourDigits =
+                    detectedLastFour
+            }
+
+
+            if let detectedCardType =
+                result.cardType {
+
+                cardType =
+                    detectedCardType
+            }
+
+
+            if result.bankName != nil ||
+               result.lastFourDigits != nil ||
+               result.cardType != nil {
+
+                var parts:
+                    [String] = []
+
+                if let name =
+                    result.bankName {
+
+                    parts.append(
+                        name
+                    )
+                }
+
+                if let lastFour =
+                    result.lastFourDigits {
+
+                    parts.append(
+                        "•••• \(lastFour)"
+                    )
+                }
+
+                if let detectedType =
+                    result.cardType {
+
+                    parts.append(
+                        detectedType.rawValue
+                    )
+                }
+
+                recognitionMessage =
+                    "识别成功：\(parts.joined(separator: " · "))。请核对后保存。"
+
+            } else {
+
+                recognitionMessage =
+                    "识别到文字，但没有可靠提取出银行卡信息。可以换一张更清晰、正面的图片。"
+            }
+
+        } catch {
+
+            recognitionMessage =
+                "识别失败：\(error.localizedDescription)"
         }
     }
 
@@ -3016,6 +3237,18 @@ struct EditCardView: View {
     private var repaymentDay:
         Int
 
+    @State
+    private var selectedCardImage:
+        PhotosPickerItem?
+
+    @State
+    private var isRecognizingCard =
+        false
+
+    @State
+    private var recognitionMessage:
+        String?
+
     @FocusState
     private var focusedField:
         EditCardNumberField?
@@ -3150,6 +3383,9 @@ struct EditCardView: View {
                         8
                     )
                 }
+
+
+                cardRecognitionSection
 
 
                 Section(
@@ -3310,6 +3546,22 @@ struct EditCardView: View {
             .scrollDismissesKeyboard(
                 .interactively
             )
+            .onChange(
+                of: selectedCardImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await recognizeCardImage(
+                        newItem
+                    )
+                }
+            }
             .navigationTitle(
                 "编辑银行卡"
             )
@@ -3385,6 +3637,168 @@ struct EditCardView: View {
                         ""
                 }
             }
+        }
+    }
+
+
+    private var cardRecognitionSection:
+        some View {
+
+        Section {
+
+            PhotosPicker(
+                selection:
+                    $selectedCardImage,
+                matching:
+                    .images
+            ) {
+
+                HStack {
+
+                    Label(
+                        isRecognizingCard
+                        ? "正在重新识别..."
+                        : "从图片重新识别",
+                        systemImage:
+                            isRecognizingCard
+                            ? "hourglass"
+                            : "viewfinder"
+                    )
+
+                    Spacer()
+
+                    if isRecognizingCard {
+
+                        ProgressView()
+                            .controlSize(
+                                .small
+                            )
+                    }
+                }
+            }
+            .disabled(
+                isRecognizingCard
+            )
+
+
+            if let recognitionMessage {
+
+                Text(
+                    recognitionMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "智能识别"
+            )
+
+        } footer: {
+
+            Text(
+                "重新选择银行卡照片或截图后，只会覆盖识别到的字段；信用额度、欠款、账单日和还款日不会被图片识别修改。"
+            )
+        }
+    }
+
+
+    @MainActor
+    private func recognizeCardImage(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        focusedField =
+            nil
+
+        isRecognizingCard =
+            true
+
+        recognitionMessage =
+            "正在读取图片..."
+
+        defer {
+
+            isRecognizingCard =
+                false
+
+            selectedCardImage =
+                nil
+        }
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    )
+            else {
+
+                recognitionMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            let result =
+                try await CardImageOCRService
+                    .recognize(
+                        imageData:
+                            data
+                    )
+
+
+            if let detectedBankName =
+                result.bankName {
+
+                bankName =
+                    detectedBankName
+            }
+
+
+            if let detectedLastFour =
+                result.lastFourDigits {
+
+                lastFourDigits =
+                    detectedLastFour
+            }
+
+
+            if let detectedCardType =
+                result.cardType {
+
+                cardType =
+                    detectedCardType
+            }
+
+
+            if result.bankName != nil ||
+               result.lastFourDigits != nil ||
+               result.cardType != nil {
+
+                recognitionMessage =
+                    "已更新识别到的银行卡信息，请核对后保存。"
+
+            } else {
+
+                recognitionMessage =
+                    "没有可靠提取出新的银行卡信息，原有内容未修改。"
+            }
+
+        } catch {
+
+            recognitionMessage =
+                "识别失败：\(error.localizedDescription)"
         }
     }
 
