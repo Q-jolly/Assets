@@ -43,6 +43,11 @@ struct CardWalletView: View {
         CGFloat = 0
 
 
+    @State
+    private var switchDirection:
+        Int = 0
+
+
     private let cardReveal:
         CGFloat = 76
 
@@ -338,7 +343,9 @@ struct CardWalletView: View {
                             insertion:
                                 .move(
                                     edge:
-                                        .bottom
+                                        switchDirection >= 0
+                                        ? .bottom
+                                        : .top
                                 )
                                 .combined(
                                     with:
@@ -347,7 +354,9 @@ struct CardWalletView: View {
                             removal:
                                 .move(
                                     edge:
-                                        .top
+                                        switchDirection >= 0
+                                        ? .bottom
+                                        : .top
                                 )
                                 .combined(
                                     with:
@@ -459,18 +468,16 @@ struct CardWalletView: View {
                selectedCardIndex >=
                 cards.count - 1 {
 
-                dragOffset =
-                    translation * 0.18
-
-            } else if translation > 0 &&
-                      selectedCardIndex <=
-                        0 {
-
+                // 最后一张向上拖时保留轻微回弹，
+                // 避免直接把卡拖出卡组。
                 dragOffset =
                     translation * 0.18
 
             } else {
 
+                // 第一张向下拖也允许完整跟手。
+                // 松手超过阈值后，会把当前顶卡切到下面，
+                // 下一张卡自动顶上来。
                 dragOffset =
                     translation
             }
@@ -503,12 +510,33 @@ struct CardWalletView: View {
                 if decisionValue <
                     -55 {
 
+                    switchDirection =
+                        1
+
                     goToNextCard()
 
                 } else if decisionValue >
                             55 {
 
-                    goToPreviousCard()
+                    if selectedCardIndex ==
+                        0 &&
+                       cards.count >
+                        1 {
+
+                        // 第一张卡也能“往下切”：
+                        // 顶卡下沉，第二张升到最上面。
+                        switchDirection =
+                            1
+
+                        goToNextCard()
+
+                    } else {
+
+                        switchDirection =
+                            -1
+
+                        goToPreviousCard()
+                    }
                 }
 
                 dragOffset =
@@ -566,6 +594,11 @@ struct CardWalletView: View {
             )
         ) {
 
+            switchDirection =
+                index >= selectedCardIndex
+                ? 1
+                : -1
+
             selectedCardIndex =
                 index
 
@@ -612,7 +645,7 @@ struct CardWalletView: View {
 
             Text(
                 cards.count > 1
-                ? "卡片区域上下滑动切换 · 点击下方卡片也可切换"
+                ? "上下滑动切卡 · 顶部第一张也可下拉切到下一张"
                 : "点击银行卡翻转正反面"
             )
 
