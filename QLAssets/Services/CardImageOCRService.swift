@@ -438,131 +438,321 @@ enum CardImageOCRService {
             [String]
     ) -> String? {
 
-        var candidates:
-            [String] = []
+        var candidates =
+            Set<String>()
 
 
+        // 1. 单行候选：
+        //    6217 0000 1234 5678
+        //    6217-0000-1234-5678
         for line in lines {
 
+            let normalized =
+                normalizePotentialCardNumber(
+                    line
+                )
+
+
             let digits =
-                line.filter {
+                normalized.filter {
                     $0.isNumber
                 }
 
 
-            if digits.count >= 13 &&
-               digits.count <= 19 {
+            if isCardNumberLength(
+                digits.count
+            ) {
 
-                candidates.append(
+                candidates.insert(
                     digits
                 )
             }
 
 
-            let pattern =
-                #"(?<!\d)(?:\d[\s\-]?){13,19}(?!\d)"#
+            for group in digitGroups(
+                in:
+                    normalized
+            ) {
 
+                if isCardNumberLength(
+                    group.count
+                ) {
 
-            guard
-                let regex =
-                    try? NSRegularExpression(
-                        pattern:
-                            pattern
+                    candidates.insert(
+                        group
                     )
-            else {
-                continue
+                }
+            }
+        }
+
+
+        // 2. OCR 经常把银行卡号拆成多行，
+        //    例如：
+        //    6217
+        //    0000
+        //    1234
+        //    5678
+        //
+        //    这里尝试把相邻 2~5 行拼接。
+        guard !lines.isEmpty
+        else {
+            return nil
+        }
+
+
+        let normalizedLines =
+            lines.map {
+                normalizePotentialCardNumber(
+                    $0
+                )
             }
 
 
-            let nsRange =
-                NSRange(
-                    line.startIndex...,
-                    in:
-                        line
-                )
+        for startIndex in normalizedLines.indices {
+
+            var combined =
+                ""
 
 
-            for match in regex.matches(
-                in:
-                    line,
-                range:
-                    nsRange
+            for endIndex in startIndex...min(
+                startIndex + 4,
+                normalizedLines.count - 1
             ) {
 
-                guard
-                    let range =
-                        Range(
-                            match.range,
-                            in:
-                                line
-                        )
-                else {
+                let piece =
+                    normalizedLines[
+                        endIndex
+                    ]
+                    .filter {
+                        $0.isNumber
+                    }
+
+
+                // 一行完全没有数字时，
+                // 不继续跨越文本区域拼接。
+                if piece.isEmpty {
+
+                    if !combined.isEmpty {
+                        break
+                    }
+
                     continue
                 }
 
 
-                let candidate =
-                    line[range]
-                        .filter {
-                            $0.isNumber
-                        }
+                // 银行卡号常见分组为 3~6 位。
+                // 太长的单行大概率是日期/编号等其他信息。
+                if piece.count > 8 &&
+                   combined.isEmpty {
+
+                    break
+                }
 
 
-                if candidate.count >= 13 &&
-                   candidate.count <= 19 {
+                combined +=
+                    piece
 
-                    candidates.append(
-                        String(
-                            candidate
-                        )
+
+                if isCardNumberLength(
+                    combined.count
+                ) {
+
+                    candidates.insert(
+                        combined
                     )
+                }
+
+
+                if combined.count >=
+                    19 {
+
+                    break
                 }
             }
         }
 
 
-        let uniqueCandidates =
-            Array(
-                Set(
-                    candidates
+        // 3. 优先选择通过 Luhn 校验的候选。
+        let luhnCandidates =
+            candidates.filter {
+                passesLuhn(
+                    $0
                 )
-            )
+            }
 
 
-        if let luhnCandidate =
-            uniqueCandidates
-                .filter({
-                    passesLuhn(
-                        $0
-                    )
-                })
+        if let best =
+            luhnCandidates
                 .sorted(
-                    by: {
-                        preferredCardNumber(
-                            $0,
-                            over:
-                                $1
-                        )
-                    }
+                    by:
+                        preferredCardNumber
                 )
                 .first {
 
-            return
-                luhnCandidate
+            return best
         }
 
 
-        return uniqueCandidates
+        // 4. 如果图片质量导致某一位识别错误，
+        //    仍然返回最像银行卡号的候选，
+        //    但最终只保存后四位，并由用户确认。
+        return candidates
             .sorted(
-                by: {
-                    preferredCardNumber(
-                        $0,
-                        over:
-                            $1
-                    )
-                }
+                by:
+                    preferredCardNumber
             )
             .first
+    }
+
+
+    private static func isCardNumberLength(
+        _ count:
+            Int
+    ) -> Bool {
+
+        count >= 13 &&
+        count <= 19
+    }
+
+
+    private static func digitGroups(
+        in text:
+            String
+    ) -> [String] {
+
+        let pattern =
+            #"(?<!\d)(?:\d[\s\-]?){13,19}(?!\d)"#
+
+
+        guard
+            let regex =
+                try? NSRegularExpression(
+                    pattern:
+                        pattern
+                )
+        else {
+
+            return []
+        }
+
+
+        let range =
+            NSRange(
+                text.startIndex...,
+                in:
+                    text
+            )
+
+
+        return regex.matches(
+            in:
+                text,
+            range:
+                range
+        )
+        .compactMap { match in
+
+            guard
+                let swiftRange =
+                    Range(
+                        match.range,
+                        in:
+                            text
+                    )
+            else {
+
+                return nil
+            }
+
+
+            let digits =
+                text[
+                    swiftRange
+                ]
+                .filter {
+                    $0.isNumber
+                }
+
+
+            guard isCardNumberLength(
+                digits.count
+            )
+            else {
+
+                return nil
+            }
+
+            return digits
+        }
+    }
+
+
+    private static func normalizePotentialCardNumber(
+        _ text:
+            String
+    ) -> String {
+
+        // 只在“数字感很强”的文本中做字符纠错，
+        // 避免把普通英文单词误当成卡号。
+        let digitCount =
+            text.filter {
+                $0.isNumber
+            }
+            .count
+
+
+        guard digitCount >= 6
+        else {
+
+            return text
+        }
+
+
+        var result =
+            ""
+
+
+        for character in text {
+
+            switch character {
+
+            case "O",
+                 "o",
+                 "Q":
+
+                result.append(
+                    "0"
+                )
+
+            case "I",
+                 "l",
+                 "|":
+
+                result.append(
+                    "1"
+                )
+
+            case "S":
+
+                result.append(
+                    "5"
+                )
+
+            case "B":
+
+                result.append(
+                    "8"
+                )
+
+            default:
+
+                result.append(
+                    character
+                )
+            }
+        }
+
+        return result
     }
 
 

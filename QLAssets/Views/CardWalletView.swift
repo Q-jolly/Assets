@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 import Foundation
 import PhotosUI
+import UIKit
+import Combine
 
 
 // MARK: - 卡包首页
@@ -965,6 +967,10 @@ struct FlippableBankCardView: View {
     private var flipped =
         false
 
+    @State
+    private var customFaceImage:
+        UIImage?
+
 
     init(
         card: BankCard,
@@ -1081,6 +1087,31 @@ struct FlippableBankCardView: View {
                     false
             }
         }
+        .onAppear {
+
+            reloadCustomFace()
+        }
+        .onReceive(
+            NotificationCenter.default
+                .publisher(
+                    for:
+                        CardFaceImageStore
+                            .didChangeNotification
+                )
+        ) { notification in
+
+            guard
+                let changedID =
+                    notification.object
+                    as? String,
+                changedID ==
+                    card.id.uuidString
+            else {
+                return
+            }
+
+            reloadCustomFace()
+        }
     }
 
 
@@ -1091,10 +1122,7 @@ struct FlippableBankCardView: View {
 
         ZStack {
 
-            CardThemeBackground(
-                theme:
-                    card.theme
-            )
+            cardFrontBackground
 
 
             VStack(
@@ -1304,6 +1332,61 @@ struct FlippableBankCardView: View {
             radius: 14,
             y: 8
         )
+    }
+
+
+    @ViewBuilder
+    private var cardFrontBackground:
+        some View {
+
+        if let customFaceImage {
+
+            Image(
+                uiImage:
+                    customFaceImage
+            )
+            .resizable()
+            .scaledToFill()
+            .overlay {
+
+                LinearGradient(
+                    colors:
+                        [
+                            .black.opacity(
+                                0.28
+                            ),
+                            .black.opacity(
+                                0.08
+                            ),
+                            .black.opacity(
+                                0.30
+                            )
+                        ],
+                    startPoint:
+                        .topLeading,
+                    endPoint:
+                        .bottomTrailing
+                )
+            }
+
+        } else {
+
+            CardThemeBackground(
+                theme:
+                    card.theme
+            )
+        }
+    }
+
+
+    private func reloadCustomFace() {
+
+        customFaceImage =
+            CardFaceImageStore
+                .image(
+                    for:
+                        card.id
+                )
     }
 
 
@@ -1853,6 +1936,22 @@ struct AddCardView: View {
     private var recognitionMessage:
         String?
 
+    @State
+    private var recognizedImageData:
+        Data?
+
+    @State
+    private var selectedFaceImage:
+        PhotosPickerItem?
+
+    @State
+    private var customFaceImageData:
+        Data?
+
+    @State
+    private var faceMessage:
+        String?
+
     @FocusState
     private var focusedField:
         CardNumberField?
@@ -2030,6 +2129,81 @@ struct AddCardView: View {
                             .tag(theme)
                         }
                     }
+
+
+                    PhotosPicker(
+                        selection:
+                            $selectedFaceImage,
+                        matching:
+                            .images
+                    ) {
+
+                        Label(
+                            customFaceImageData == nil
+                            ? "选择自定义卡面"
+                            : "更换自定义卡面",
+                            systemImage:
+                                "photo"
+                        )
+                    }
+
+
+                    if recognizedImageData != nil {
+
+                        Button {
+
+                            customFaceImageData =
+                                recognizedImageData
+
+                            faceMessage =
+                                "已将本次识别图片设为卡面预览。"
+
+                        } label: {
+
+                            Label(
+                                "使用识别图片作为卡面",
+                                systemImage:
+                                    "rectangle.on.rectangle"
+                            )
+                        }
+                    }
+
+
+                    if customFaceImageData != nil {
+
+                        Button(
+                            "恢复主题卡面",
+                            role:
+                                .destructive
+                        ) {
+
+                            customFaceImageData =
+                                nil
+
+                            faceMessage =
+                                "已恢复主题卡面。"
+                        }
+                    }
+
+
+                    if let faceMessage {
+
+                        Text(
+                            faceMessage
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
+
+                } footer: {
+
+                    Text(
+                        "自定义卡面图片只保存在本机。App 会自动压缩图片，银行卡号仍只保存后四位。"
+                    )
                 }
             }
             .scrollDismissesKeyboard(
@@ -2047,6 +2221,22 @@ struct AddCardView: View {
                 Task {
 
                     await recognizeCardImage(
+                        newItem
+                    )
+                }
+            }
+            .onChange(
+                of: selectedFaceImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await loadCustomFace(
                         newItem
                     )
                 }
@@ -2239,6 +2429,10 @@ struct AddCardView: View {
             }
 
 
+            recognizedImageData =
+                data
+
+
             let result =
                 try await CardImageOCRService
                     .recognize(
@@ -2315,6 +2509,75 @@ struct AddCardView: View {
 
             recognitionMessage =
                 "识别失败：\(error.localizedDescription)"
+        }
+    }
+
+
+    private var previewCustomFaceImage:
+        UIImage? {
+
+        guard
+            let customFaceImageData
+        else {
+
+            return nil
+        }
+
+        return UIImage(
+            data:
+                customFaceImageData
+        )
+    }
+
+
+    @MainActor
+    private func loadCustomFace(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        faceMessage =
+            "正在读取卡面图片..."
+
+
+        defer {
+
+            selectedFaceImage =
+                nil
+        }
+
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    ),
+                UIImage(
+                    data:
+                        data
+                ) != nil
+            else {
+
+                faceMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            customFaceImageData =
+                data
+
+            faceMessage =
+                "自定义卡面已加载，保存银行卡后会写入本机。"
+
+        } catch {
+
+            faceMessage =
+                "读取卡面失败：\(error.localizedDescription)"
         }
     }
 
@@ -2464,7 +2727,9 @@ struct AddCardView: View {
                     ? "CARD HOLDER"
                     : holderName,
                 theme:
-                    theme
+                    theme,
+                customFaceImage:
+                    previewCustomFaceImage
             )
             .listRowInsets(
                 EdgeInsets()
@@ -2592,6 +2857,19 @@ struct AddCardView: View {
         try?
             modelContext.save()
 
+
+        if let customFaceImageData {
+
+            try?
+                CardFaceImageStore
+                    .save(
+                        imageData:
+                            customFaceImageData,
+                        for:
+                            card.id
+                    )
+        }
+
         dismiss()
     }
 
@@ -2655,14 +2933,15 @@ struct BankCardPreview: View {
     let theme:
         CardTheme
 
+    let customFaceImage:
+        UIImage?
+
 
     var body: some View {
 
         ZStack {
 
-            CardThemeBackground(
-                theme: theme
-            )
+            previewBackground
 
 
             VStack(
@@ -2768,6 +3047,50 @@ struct BankCardPreview: View {
         .padding(
             .horizontal
         )
+    }
+
+
+    @ViewBuilder
+    private var previewBackground:
+        some View {
+
+        if let customFaceImage {
+
+            Image(
+                uiImage:
+                    customFaceImage
+            )
+            .resizable()
+            .scaledToFill()
+            .overlay {
+
+                LinearGradient(
+                    colors:
+                        [
+                            .black.opacity(
+                                0.28
+                            ),
+                            .black.opacity(
+                                0.08
+                            ),
+                            .black.opacity(
+                                0.30
+                            )
+                        ],
+                    startPoint:
+                        .topLeading,
+                    endPoint:
+                        .bottomTrailing
+                )
+            }
+
+        } else {
+
+            CardThemeBackground(
+                theme:
+                    theme
+            )
+        }
     }
 
 
@@ -3079,6 +3402,12 @@ struct CardDetailView: View {
                     .destructive
             ) {
 
+                CardFaceImageStore
+                    .delete(
+                        for:
+                            card.id
+                    )
+
                 modelContext.delete(
                     card
                 )
@@ -3249,6 +3578,22 @@ struct EditCardView: View {
     private var recognitionMessage:
         String?
 
+    @State
+    private var recognizedImageData:
+        Data?
+
+    @State
+    private var selectedFaceImage:
+        PhotosPickerItem?
+
+    @State
+    private var customFaceImageData:
+        Data?
+
+    @State
+    private var faceMessage:
+        String?
+
     @FocusState
     private var focusedField:
         EditCardNumberField?
@@ -3349,6 +3694,16 @@ struct EditCardView: View {
                     card.repaymentDay
                     ?? 20
             )
+
+        _customFaceImageData =
+            State(
+                initialValue:
+                    CardFaceImageStore
+                        .imageData(
+                            for:
+                                card.id
+                        )
+            )
     }
 
 
@@ -3370,7 +3725,9 @@ struct EditCardView: View {
                         holderName:
                             holderName,
                         theme:
-                            theme
+                            theme,
+                        customFaceImage:
+                            previewCustomFaceImage
                     )
                     .listRowInsets(
                         EdgeInsets()
@@ -3541,6 +3898,81 @@ struct EditCardView: View {
                             .tag(item)
                         }
                     }
+
+
+                    PhotosPicker(
+                        selection:
+                            $selectedFaceImage,
+                        matching:
+                            .images
+                    ) {
+
+                        Label(
+                            customFaceImageData == nil
+                            ? "选择自定义卡面"
+                            : "更换自定义卡面",
+                            systemImage:
+                                "photo"
+                        )
+                    }
+
+
+                    if recognizedImageData != nil {
+
+                        Button {
+
+                            customFaceImageData =
+                                recognizedImageData
+
+                            faceMessage =
+                                "已将本次识别图片设为卡面预览。"
+
+                        } label: {
+
+                            Label(
+                                "使用识别图片作为卡面",
+                                systemImage:
+                                    "rectangle.on.rectangle"
+                            )
+                        }
+                    }
+
+
+                    if customFaceImageData != nil {
+
+                        Button(
+                            "恢复主题卡面",
+                            role:
+                                .destructive
+                        ) {
+
+                            customFaceImageData =
+                                nil
+
+                            faceMessage =
+                                "保存后将移除自定义卡面。"
+                        }
+                    }
+
+
+                    if let faceMessage {
+
+                        Text(
+                            faceMessage
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
+
+                } footer: {
+
+                    Text(
+                        "自定义卡面只保存在本机，不写入 SwiftData，也不会上传。"
+                    )
                 }
             }
             .scrollDismissesKeyboard(
@@ -3558,6 +3990,22 @@ struct EditCardView: View {
                 Task {
 
                     await recognizeCardImage(
+                        newItem
+                    )
+                }
+            }
+            .onChange(
+                of: selectedFaceImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await loadCustomFace(
                         newItem
                     )
                 }
@@ -3750,6 +4198,10 @@ struct EditCardView: View {
             }
 
 
+            recognizedImageData =
+                data
+
+
             let result =
                 try await CardImageOCRService
                     .recognize(
@@ -3799,6 +4251,75 @@ struct EditCardView: View {
 
             recognitionMessage =
                 "识别失败：\(error.localizedDescription)"
+        }
+    }
+
+
+    private var previewCustomFaceImage:
+        UIImage? {
+
+        guard
+            let customFaceImageData
+        else {
+
+            return nil
+        }
+
+        return UIImage(
+            data:
+                customFaceImageData
+        )
+    }
+
+
+    @MainActor
+    private func loadCustomFace(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        faceMessage =
+            "正在读取卡面图片..."
+
+
+        defer {
+
+            selectedFaceImage =
+                nil
+        }
+
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    ),
+                UIImage(
+                    data:
+                        data
+                ) != nil
+            else {
+
+                faceMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            customFaceImageData =
+                data
+
+            faceMessage =
+                "自定义卡面已加载，保存银行卡后会写入本机。"
+
+        } catch {
+
+            faceMessage =
+                "读取卡面失败：\(error.localizedDescription)"
         }
     }
 
@@ -4000,6 +4521,27 @@ struct EditCardView: View {
 
         try?
             modelContext.save()
+
+
+        if let customFaceImageData {
+
+            try?
+                CardFaceImageStore
+                    .save(
+                        imageData:
+                            customFaceImageData,
+                        for:
+                            card.id
+                    )
+
+        } else {
+
+            CardFaceImageStore
+                .delete(
+                    for:
+                        card.id
+                )
+        }
 
         dismiss()
     }
