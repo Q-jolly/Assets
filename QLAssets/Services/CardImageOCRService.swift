@@ -16,6 +16,12 @@ struct BankCardOCRResult {
 
     let recognizedText:
         String
+
+    let extractedCardImageData:
+        Data?
+
+    let usedRectangleDetection:
+        Bool
 }
 
 
@@ -54,11 +60,25 @@ enum CardImageOCRService {
     ) async throws
         -> BankCardOCRResult {
 
+        let extraction =
+            CardImageProcessor
+                .extractCardFace(
+                    from:
+                        imageData
+                )
+
+
+        let ocrImageData =
+            extraction?
+                .imageData
+            ?? imageData
+
+
         guard
             let image =
                 UIImage(
                     data:
-                        imageData
+                        ocrImageData
                 ),
             let cgImage =
                 image.cgImage
@@ -76,7 +96,7 @@ enum CardImageOCRService {
             .accurate
 
         request.usesLanguageCorrection =
-            true
+            false
 
         request.recognitionLanguages =
             [
@@ -85,7 +105,7 @@ enum CardImageOCRService {
             ]
 
         request.minimumTextHeight =
-            0.012
+            0.010
 
 
         let handler =
@@ -160,7 +180,14 @@ enum CardImageOCRService {
                         fullText
                 ),
             recognizedText:
-                fullText
+                fullText,
+            extractedCardImageData:
+                extraction?
+                    .imageData,
+            usedRectangleDetection:
+                extraction?
+                    .usedRectangleDetection
+                ?? false
         )
     }
 
@@ -442,21 +469,22 @@ enum CardImageOCRService {
             Set<String>()
 
 
-        // 1. 单行候选：
-        //    6217 0000 1234 5678
-        //    6217-0000-1234-5678
-        for line in lines {
-
-            let normalized =
+        let normalizedLines =
+            lines.map {
                 normalizePotentialCardNumber(
-                    line
+                    $0
                 )
+            }
 
+
+        // 单行完整卡号
+        for line in normalizedLines {
 
             let digits =
-                normalized.filter {
-                    $0.isNumber
-                }
+                asciiDigits(
+                    in:
+                        line
+                )
 
 
             if isCardNumberLength(
@@ -471,108 +499,88 @@ enum CardImageOCRService {
 
             for group in digitGroups(
                 in:
-                    normalized
+                    line
             ) {
 
-                if isCardNumberLength(
-                    group.count
-                ) {
-
-                    candidates.insert(
-                        group
-                    )
-                }
-            }
-        }
-
-
-        // 2. OCR 经常把银行卡号拆成多行，
-        //    例如：
-        //    6217
-        //    0000
-        //    1234
-        //    5678
-        //
-        //    这里尝试把相邻 2~5 行拼接。
-        guard !lines.isEmpty
-        else {
-            return nil
-        }
-
-
-        let normalizedLines =
-            lines.map {
-                normalizePotentialCardNumber(
-                    $0
+                candidates.insert(
+                    group
                 )
             }
+        }
 
 
-        for startIndex in normalizedLines.indices {
+        // OCR 可能把 16/19 位卡号拆成多行，
+        // 尝试合并相邻 2~5 行。
+        if !normalizedLines.isEmpty {
 
-            var combined =
-                ""
+            for startIndex in
+                normalizedLines.indices {
+
+                var combined =
+                    ""
 
 
-            for endIndex in startIndex...min(
-                startIndex + 4,
-                normalizedLines.count - 1
-            ) {
+                let lastIndex =
+                    min(
+                        startIndex + 4,
+                        normalizedLines.count - 1
+                    )
 
-                let piece =
-                    normalizedLines[
-                        endIndex
-                    ]
-                    .filter {
-                        $0.isNumber
+
+                for endIndex in
+                    startIndex...lastIndex {
+
+                    let piece =
+                        asciiDigits(
+                            in:
+                                normalizedLines[
+                                    endIndex
+                                ]
+                        )
+
+
+                    if piece.isEmpty {
+
+                        if !combined.isEmpty {
+                            break
+                        }
+
+                        continue
                     }
 
 
-                // 一行完全没有数字时，
-                // 不继续跨越文本区域拼接。
-                if piece.isEmpty {
+                    // 单个 OCR 行太长通常不是银行卡分组
+                    if piece.count > 8 &&
+                       combined.isEmpty {
 
-                    if !combined.isEmpty {
                         break
                     }
 
-                    continue
-                }
+
+                    combined +=
+                        piece
 
 
-                // 银行卡号常见分组为 3~6 位。
-                // 太长的单行大概率是日期/编号等其他信息。
-                if piece.count > 8 &&
-                   combined.isEmpty {
+                    if isCardNumberLength(
+                        combined.count
+                    ) {
 
-                    break
-                }
-
-
-                combined +=
-                    piece
+                        candidates.insert(
+                            combined
+                        )
+                    }
 
 
-                if isCardNumberLength(
-                    combined.count
-                ) {
+                    if combined.count >=
+                        19 {
 
-                    candidates.insert(
-                        combined
-                    )
-                }
-
-
-                if combined.count >=
-                    19 {
-
-                    break
+                        break
+                    }
                 }
             }
         }
 
 
-        // 3. 优先选择通过 Luhn 校验的候选。
         let luhnCandidates =
             candidates.filter {
                 passesLuhn(
@@ -593,9 +601,8 @@ enum CardImageOCRService {
         }
 
 
-        // 4. 如果图片质量导致某一位识别错误，
-        //    仍然返回最像银行卡号的候选，
-        //    但最终只保存后四位，并由用户确认。
+        // 没通过 Luhn 时仍允许返回最合理的候选，
+        // 但所有候选都已经保证只含 ASCII 数字。
         return candidates
             .sorted(
                 by:
@@ -615,13 +622,39 @@ enum CardImageOCRService {
     }
 
 
+    private static func asciiDigits(
+        in text:
+            String
+    ) -> String {
+
+        var result =
+            ""
+
+
+        for scalar in
+            text.unicodeScalars {
+
+            if scalar.value >= 48 &&
+               scalar.value <= 57 {
+
+                result.unicodeScalars
+                    .append(
+                        scalar
+                    )
+            }
+        }
+
+        return result
+    }
+
+
     private static func digitGroups(
         in text:
             String
     ) -> [String] {
 
         let pattern =
-            #"(?<!\d)(?:\d[\s\-]?){13,19}(?!\d)"#
+            #"(?<![0-9])(?:[0-9][\s\-]?){13,19}(?![0-9])"#
 
 
         guard
@@ -666,12 +699,14 @@ enum CardImageOCRService {
 
 
             let digits =
-                text[
-                    swiftRange
-                ]
-                .filter {
-                    $0.isNumber
-                }
+                asciiDigits(
+                    in:
+                        String(
+                            text[
+                                swiftRange
+                            ]
+                        )
+                )
 
 
             guard isCardNumberLength(
@@ -692,16 +727,18 @@ enum CardImageOCRService {
             String
     ) -> String {
 
-        // 只在“数字感很强”的文本中做字符纠错，
-        // 避免把普通英文单词误当成卡号。
-        let digitCount =
-            text.filter {
-                $0.isNumber
-            }
+        let asciiDigitCount =
+            asciiDigits(
+                in:
+                    text
+            )
             .count
 
 
-        guard digitCount >= 6
+        // 只有这一行已经包含较多阿拉伯数字时，
+        // 才把 OCR 常见的 O/I/S/B 字母纠正为数字。
+        // 中文字符永远不会被当作银行卡号数字。
+        guard asciiDigitCount >= 4
         else {
 
             return text

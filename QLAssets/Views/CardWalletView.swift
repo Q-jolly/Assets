@@ -2478,16 +2478,36 @@ struct AddCardView: View {
             }
 
 
-            recognizedImageData =
-                data
-
-
             let result =
                 try await CardImageOCRService
                     .recognize(
                         imageData:
                             data
                     )
+
+
+            if let extractedCardImageData =
+                result.extractedCardImageData {
+
+                recognizedImageData =
+                    extractedCardImageData
+
+                customFaceImageData =
+                    extractedCardImageData
+
+                faceMessage =
+                    result.usedRectangleDetection
+                    ? "已自动检测银行卡边框、透视矫正并提取为卡面。"
+                    : "未检测到完整银行卡边框，已按银行卡比例自动裁切为卡面。"
+
+            } else {
+
+                recognizedImageData =
+                    nil
+
+                faceMessage =
+                    "银行卡信息已尝试识别，但没有成功提取卡面图片。"
+            }
 
 
             if let detectedBankName =
@@ -2502,7 +2522,9 @@ struct AddCardView: View {
                 result.lastFourDigits {
 
                 lastFourDigits =
-                    detectedLastFour
+                    sanitizeLastFour(
+                        detectedLastFour
+                    )
             }
 
 
@@ -2545,8 +2567,13 @@ struct AddCardView: View {
                     )
                 }
 
+                let cardFaceText =
+                    result.extractedCardImageData != nil
+                    ? " · 已自动提取卡面"
+                    : ""
+
                 recognitionMessage =
-                    "识别成功：\(parts.joined(separator: " · "))。请核对后保存。"
+                    "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。请核对后保存。"
 
             } else {
 
@@ -2770,7 +2797,9 @@ struct AddCardView: View {
                 cardType:
                     cardType,
                 lastFourDigits:
-                    lastFourDigits,
+                    sanitizeLastFour(
+                        lastFourDigits
+                    ),
                 holderName:
                     holderName.isEmpty
                     ? "CARD HOLDER"
@@ -2805,7 +2834,10 @@ struct AddCardView: View {
                 )
                 .isEmpty
             &&
-            lastFourDigits.count ==
+            sanitizeLastFour(
+                lastFourDigits
+            )
+            .count ==
                 4
 
         if cardType ==
@@ -2949,16 +2981,41 @@ struct AddCardView: View {
 
 
     private func sanitizeLastFour(
-        _ value: String
+        _ value:
+            String
     ) -> String {
 
-        String(
-            value
-                .filter {
-                    $0.isNumber
-                }
-                .prefix(4)
-        )
+        var digits =
+            ""
+
+
+        for scalar in
+            value.unicodeScalars {
+
+            guard
+                scalar.value >= 48,
+                scalar.value <= 57
+            else {
+
+                continue
+            }
+
+
+            digits.unicodeScalars
+                .append(
+                    scalar
+                )
+
+
+            if digits.count ==
+                4 {
+
+                break
+            }
+        }
+
+
+        return digits
     }
 }
 
@@ -3992,12 +4049,8 @@ struct EditCardView: View {
             ) {
 
                 lastFourDigits =
-                    String(
+                    sanitizeLastFour(
                         lastFourDigits
-                            .filter {
-                                $0.isNumber
-                            }
-                            .prefix(4)
                     )
             }
 
@@ -4281,16 +4334,28 @@ struct EditCardView: View {
             }
 
 
-            recognizedImageData =
-                data
-
-
             let result =
                 try await CardImageOCRService
                     .recognize(
                         imageData:
                             data
                     )
+
+
+            if let extractedCardImageData =
+                result.extractedCardImageData {
+
+                recognizedImageData =
+                    extractedCardImageData
+
+                customFaceImageData =
+                    extractedCardImageData
+
+                faceMessage =
+                    result.usedRectangleDetection
+                    ? "已自动检测银行卡边框、透视矫正并更新卡面预览。"
+                    : "未检测到完整边框，已按银行卡比例自动裁切并更新卡面预览。"
+            }
 
 
             if let detectedBankName =
@@ -4305,7 +4370,9 @@ struct EditCardView: View {
                 result.lastFourDigits {
 
                 lastFourDigits =
-                    detectedLastFour
+                    sanitizeLastFour(
+                        detectedLastFour
+                    )
             }
 
 
@@ -4552,7 +4619,9 @@ struct EditCardView: View {
             cardType.rawValue
 
         card.lastFourDigits =
-            lastFourDigits
+            sanitizeLastFour(
+                lastFourDigits
+            )
 
         card.holderName =
             holderName
@@ -4627,6 +4696,45 @@ struct EditCardView: View {
         }
 
         dismiss()
+    }
+
+
+    private func sanitizeLastFour(
+        _ value:
+            String
+    ) -> String {
+
+        var digits =
+            ""
+
+
+        for scalar in
+            value.unicodeScalars {
+
+            guard
+                scalar.value >= 48,
+                scalar.value <= 57
+            else {
+
+                continue
+            }
+
+
+            digits.unicodeScalars
+                .append(
+                    scalar
+                )
+
+
+            if digits.count ==
+                4 {
+
+                break
+            }
+        }
+
+
+        return digits
     }
 
 
