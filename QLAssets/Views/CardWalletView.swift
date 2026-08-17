@@ -1976,96 +1976,9 @@ struct AddCardView: View {
 
                 previewSection
 
-
                 cardRecognitionSection
 
-
-                Section(
-                    "基本信息"
-                ) {
-
-                    TextField(
-                        "银行名称",
-                        text:
-                            $bankName
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .bankName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
-
-
-                    Picker(
-                        "卡片类型",
-                        selection:
-                            $cardType
-                    ) {
-
-                        ForEach(
-                            BankCardType
-                                .allCases
-                        ) { type in
-
-                            Text(
-                                type.rawValue
-                            )
-                            .tag(type)
-                        }
-                    }
-
-
-                    TextField(
-                        "卡号后四位",
-                        text:
-                            $lastFourDigits
-                    )
-                    .keyboardType(
-                        .numberPad
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .lastFour
-                    )
-                    .onChange(
-                        of:
-                            lastFourDigits
-                    ) {
-
-                        lastFourDigits =
-                            sanitizeLastFour(
-                                lastFourDigits
-                            )
-                    }
-
-
-                    TextField(
-                        "持卡人姓名",
-                        text:
-                            $holderName
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .holderName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
-                }
-
+                basicInfoSection
 
                 if cardType ==
                     .credit {
@@ -2073,138 +1986,9 @@ struct AddCardView: View {
                     creditCardSection
                 }
 
+                linkedAccountSection
 
-                Section(
-                    "关联账户"
-                ) {
-
-                    Picker(
-                        "资产账户",
-                        selection:
-                            $linkedAccountID
-                    ) {
-
-                        Text(
-                            "不关联"
-                        )
-                        .tag(
-                            UUID?.none
-                        )
-
-                        ForEach(
-                            accounts
-                        ) { account in
-
-                            Text(
-                                "\(account.name)  \(account.balance.formatted(.currency(code: "CNY")))"
-                            )
-                            .tag(
-                                Optional(
-                                    account.id
-                                )
-                            )
-                        }
-                    }
-                }
-
-
-                Section(
-                    "卡面"
-                ) {
-
-                    Picker(
-                        "卡面主题",
-                        selection:
-                            $theme
-                    ) {
-
-                        ForEach(
-                            CardTheme
-                                .allCases
-                        ) { theme in
-
-                            Text(
-                                theme.rawValue
-                            )
-                            .tag(theme)
-                        }
-                    }
-
-
-                    PhotosPicker(
-                        selection:
-                            $selectedFaceImage,
-                        matching:
-                            .images
-                    ) {
-
-                        Label(
-                            customFaceImageData == nil
-                            ? "选择自定义卡面"
-                            : "更换自定义卡面",
-                            systemImage:
-                                "photo"
-                        )
-                    }
-
-
-                    if recognizedImageData != nil {
-
-                        Button {
-
-                            customFaceImageData =
-                                recognizedImageData
-
-                            faceMessage =
-                                "已将本次识别图片设为卡面预览。"
-
-                        } label: {
-
-                            Label(
-                                "使用识别图片作为卡面",
-                                systemImage:
-                                    "rectangle.on.rectangle"
-                            )
-                        }
-                    }
-
-
-                    if customFaceImageData != nil {
-
-                        Button(
-                            "恢复主题卡面",
-                            role:
-                                .destructive
-                        ) {
-
-                            customFaceImageData =
-                                nil
-
-                            faceMessage =
-                                "已恢复主题卡面。"
-                        }
-                    }
-
-
-                    if let faceMessage {
-
-                        Text(
-                            faceMessage
-                        )
-                        .font(
-                            .caption
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-                    }
-
-                } footer: {
-
-                    Text(
-                        "自定义卡面图片只保存在本机。App 会自动压缩图片，银行卡号仍只保存后四位。"
-                    )
-                }
+                cardFaceSection
             }
             .scrollDismissesKeyboard(
                 .interactively
@@ -2316,6 +2100,271 @@ struct AddCardView: View {
                         ""
                 }
             }
+        }
+    }
+
+
+    private var basicInfoSection:
+        some View {
+
+        Section(
+            "基本信息"
+        ) {
+
+            TextField(
+                "银行名称",
+                text:
+                    $bankName
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .bankName
+            )
+            .submitLabel(
+                .done
+            )
+            .onSubmit {
+
+                focusedField =
+                    nil
+            }
+
+
+            Picker(
+                "卡片类型",
+                selection:
+                    $cardType
+            ) {
+
+                ForEach(
+                    BankCardType
+                        .allCases
+                ) { type in
+
+                    Text(
+                        type.rawValue
+                    )
+                    .tag(
+                        type
+                    )
+                }
+            }
+
+
+            TextField(
+                "卡号后四位",
+                text:
+                    $lastFourDigits
+            )
+            .keyboardType(
+                .numberPad
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .lastFour
+            )
+            .onChange(
+                of:
+                    lastFourDigits
+            ) {
+
+                lastFourDigits =
+                    sanitizeLastFour(
+                        lastFourDigits
+                    )
+            }
+
+
+            TextField(
+                "持卡人姓名",
+                text:
+                    $holderName
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .holderName
+            )
+            .submitLabel(
+                .done
+            )
+            .onSubmit {
+
+                focusedField =
+                    nil
+            }
+        }
+    }
+
+
+    private var linkedAccountSection:
+        some View {
+
+        Section(
+            "关联账户"
+        ) {
+
+            Picker(
+                "资产账户",
+                selection:
+                    $linkedAccountID
+            ) {
+
+                Text(
+                    "不关联"
+                )
+                .tag(
+                    UUID?.none
+                )
+
+
+                ForEach(
+                    accounts
+                ) { account in
+
+                    Text(
+                        accountPickerTitle(
+                            account
+                        )
+                    )
+                    .tag(
+                        Optional(
+                            account.id
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+
+    private func accountPickerTitle(
+        _ account:
+            Account
+    ) -> String {
+
+        let balanceText =
+            account.balance.formatted(
+                .currency(
+                    code:
+                        "CNY"
+                )
+            )
+
+        return
+            account.name +
+            "  " +
+            balanceText
+    }
+
+
+    private var cardFaceSection:
+        some View {
+
+        Section {
+
+            Picker(
+                "卡面主题",
+                selection:
+                    $theme
+            ) {
+
+                ForEach(
+                    CardTheme
+                        .allCases
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+
+
+            PhotosPicker(
+                selection:
+                    $selectedFaceImage,
+                matching:
+                    .images
+            ) {
+
+                Label(
+                    customFaceImageData == nil
+                    ? "选择自定义卡面"
+                    : "更换自定义卡面",
+                    systemImage:
+                        "photo"
+                )
+            }
+
+
+            if recognizedImageData != nil {
+
+                Button {
+
+                    customFaceImageData =
+                        recognizedImageData
+
+                    faceMessage =
+                        "已将本次识别图片设为卡面预览。"
+
+                } label: {
+
+                    Label(
+                        "使用识别图片作为卡面",
+                        systemImage:
+                            "rectangle.on.rectangle"
+                    )
+                }
+            }
+
+
+            if customFaceImageData != nil {
+
+                Button(
+                    "恢复主题卡面",
+                    role:
+                        .destructive
+                ) {
+
+                    customFaceImageData =
+                        nil
+
+                    faceMessage =
+                        "已恢复主题卡面。"
+                }
+            }
+
+
+            if let faceMessage {
+
+                Text(
+                    faceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "卡面"
+            )
+
+        } footer: {
+
+            Text(
+                "自定义卡面图片只保存在本机。App 会自动压缩图片，银行卡号仍只保存后四位。"
+            )
         }
     }
 
@@ -3713,128 +3762,11 @@ struct EditCardView: View {
 
             Form {
 
-                Section {
-
-                    BankCardPreview(
-                        bankName:
-                            bankName,
-                        cardType:
-                            cardType,
-                        lastFourDigits:
-                            lastFourDigits,
-                        holderName:
-                            holderName,
-                        theme:
-                            theme,
-                        customFaceImage:
-                            previewCustomFaceImage
-                    )
-                    .listRowInsets(
-                        EdgeInsets()
-                    )
-                    .listRowBackground(
-                        Color.clear
-                    )
-                    .padding(
-                        .vertical,
-                        8
-                    )
-                }
-
+                previewSection
 
                 cardRecognitionSection
 
-
-                Section(
-                    "基本信息"
-                ) {
-
-                    TextField(
-                        "银行名称",
-                        text:
-                            $bankName
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .bankName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
-
-
-                    Picker(
-                        "卡片类型",
-                        selection:
-                            $cardType
-                    ) {
-
-                        ForEach(
-                            BankCardType
-                                .allCases
-                        ) { item in
-
-                            Text(
-                                item.rawValue
-                            )
-                            .tag(item)
-                        }
-                    }
-
-
-                    TextField(
-                        "卡号后四位",
-                        text:
-                            $lastFourDigits
-                    )
-                    .keyboardType(
-                        .numberPad
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .lastFour
-                    )
-                    .onChange(
-                        of:
-                            lastFourDigits
-                    ) {
-
-                        lastFourDigits =
-                            String(
-                                lastFourDigits
-                                    .filter {
-                                        $0.isNumber
-                                    }
-                                    .prefix(4)
-                            )
-                    }
-
-
-                    TextField(
-                        "持卡人",
-                        text:
-                            $holderName
-                    )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .holderName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
-                }
-
+                basicInfoSection
 
                 if cardType ==
                     .credit {
@@ -3842,138 +3774,9 @@ struct EditCardView: View {
                     creditCardSection
                 }
 
+                linkedAccountSection
 
-                Section(
-                    "关联账户"
-                ) {
-
-                    Picker(
-                        "资产账户",
-                        selection:
-                            $accountID
-                    ) {
-
-                        Text(
-                            "不关联"
-                        )
-                        .tag(
-                            UUID?.none
-                        )
-
-                        ForEach(
-                            accounts
-                        ) { account in
-
-                            Text(
-                                account.name
-                            )
-                            .tag(
-                                Optional(
-                                    account.id
-                                )
-                            )
-                        }
-                    }
-                }
-
-
-                Section(
-                    "卡面"
-                ) {
-
-                    Picker(
-                        "主题",
-                        selection:
-                            $theme
-                    ) {
-
-                        ForEach(
-                            CardTheme
-                                .allCases
-                        ) { item in
-
-                            Text(
-                                item.rawValue
-                            )
-                            .tag(item)
-                        }
-                    }
-
-
-                    PhotosPicker(
-                        selection:
-                            $selectedFaceImage,
-                        matching:
-                            .images
-                    ) {
-
-                        Label(
-                            customFaceImageData == nil
-                            ? "选择自定义卡面"
-                            : "更换自定义卡面",
-                            systemImage:
-                                "photo"
-                        )
-                    }
-
-
-                    if recognizedImageData != nil {
-
-                        Button {
-
-                            customFaceImageData =
-                                recognizedImageData
-
-                            faceMessage =
-                                "已将本次识别图片设为卡面预览。"
-
-                        } label: {
-
-                            Label(
-                                "使用识别图片作为卡面",
-                                systemImage:
-                                    "rectangle.on.rectangle"
-                            )
-                        }
-                    }
-
-
-                    if customFaceImageData != nil {
-
-                        Button(
-                            "恢复主题卡面",
-                            role:
-                                .destructive
-                        ) {
-
-                            customFaceImageData =
-                                nil
-
-                            faceMessage =
-                                "保存后将移除自定义卡面。"
-                        }
-                    }
-
-
-                    if let faceMessage {
-
-                        Text(
-                            faceMessage
-                        )
-                        .font(
-                            .caption
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-                    }
-
-                } footer: {
-
-                    Text(
-                        "自定义卡面只保存在本机，不写入 SwiftData，也不会上传。"
-                    )
-                }
+                cardFaceSection
             }
             .scrollDismissesKeyboard(
                 .interactively
@@ -4085,6 +3888,286 @@ struct EditCardView: View {
                         ""
                 }
             }
+        }
+    }
+
+
+    private var previewSection:
+        some View {
+
+        Section {
+
+            BankCardPreview(
+                bankName:
+                    bankName,
+                cardType:
+                    cardType,
+                lastFourDigits:
+                    lastFourDigits,
+                holderName:
+                    holderName,
+                theme:
+                    theme,
+                customFaceImage:
+                    previewCustomFaceImage
+            )
+            .listRowInsets(
+                EdgeInsets()
+            )
+            .listRowBackground(
+                Color.clear
+            )
+            .padding(
+                .vertical,
+                8
+            )
+        }
+    }
+
+
+    private var basicInfoSection:
+        some View {
+
+        Section(
+            "基本信息"
+        ) {
+
+            TextField(
+                "银行名称",
+                text:
+                    $bankName
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .bankName
+            )
+            .submitLabel(
+                .done
+            )
+            .onSubmit {
+
+                focusedField =
+                    nil
+            }
+
+
+            Picker(
+                "卡片类型",
+                selection:
+                    $cardType
+            ) {
+
+                ForEach(
+                    BankCardType
+                        .allCases
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+
+
+            TextField(
+                "卡号后四位",
+                text:
+                    $lastFourDigits
+            )
+            .keyboardType(
+                .numberPad
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .lastFour
+            )
+            .onChange(
+                of:
+                    lastFourDigits
+            ) {
+
+                lastFourDigits =
+                    String(
+                        lastFourDigits
+                            .filter {
+                                $0.isNumber
+                            }
+                            .prefix(4)
+                    )
+            }
+
+
+            TextField(
+                "持卡人",
+                text:
+                    $holderName
+            )
+            .focused(
+                $focusedField,
+                equals:
+                    .holderName
+            )
+            .submitLabel(
+                .done
+            )
+            .onSubmit {
+
+                focusedField =
+                    nil
+            }
+        }
+    }
+
+
+    private var linkedAccountSection:
+        some View {
+
+        Section(
+            "关联账户"
+        ) {
+
+            Picker(
+                "资产账户",
+                selection:
+                    $accountID
+            ) {
+
+                Text(
+                    "不关联"
+                )
+                .tag(
+                    UUID?.none
+                )
+
+
+                ForEach(
+                    accounts
+                ) { account in
+
+                    Text(
+                        account.name
+                    )
+                    .tag(
+                        Optional(
+                            account.id
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+
+    private var cardFaceSection:
+        some View {
+
+        Section {
+
+            Picker(
+                "主题",
+                selection:
+                    $theme
+            ) {
+
+                ForEach(
+                    CardTheme
+                        .allCases
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+
+
+            PhotosPicker(
+                selection:
+                    $selectedFaceImage,
+                matching:
+                    .images
+            ) {
+
+                Label(
+                    customFaceImageData == nil
+                    ? "选择自定义卡面"
+                    : "更换自定义卡面",
+                    systemImage:
+                        "photo"
+                )
+            }
+
+
+            if recognizedImageData != nil {
+
+                Button {
+
+                    customFaceImageData =
+                        recognizedImageData
+
+                    faceMessage =
+                        "已将本次识别图片设为卡面预览。"
+
+                } label: {
+
+                    Label(
+                        "使用识别图片作为卡面",
+                        systemImage:
+                            "rectangle.on.rectangle"
+                    )
+                }
+            }
+
+
+            if customFaceImageData != nil {
+
+                Button(
+                    "恢复主题卡面",
+                    role:
+                        .destructive
+                ) {
+
+                    customFaceImageData =
+                        nil
+
+                    faceMessage =
+                        "保存后将移除自定义卡面。"
+                }
+            }
+
+
+            if let faceMessage {
+
+                Text(
+                    faceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "卡面"
+            )
+
+        } footer: {
+
+            Text(
+                "自定义卡面只保存在本机，不写入 SwiftData，也不会上传。"
+            )
         }
     }
 
