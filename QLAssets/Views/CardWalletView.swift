@@ -43,16 +43,13 @@ struct CardWalletView: View {
         CGFloat = 0
 
 
-    @State
-    private var switchDirection:
-        Int = 0
 
 
     private let cardReveal:
-        CGFloat = 76
+        CGFloat = 68
 
-    private let maxVisibleCards =
-        4
+    private let bottomTailReveal:
+        CGFloat = 38
 
 
     var body: some View {
@@ -234,38 +231,55 @@ struct CardWalletView: View {
     }
 
 
-    private var remainingCardCount:
-        Int {
+    private var stackedCards:
+        [BankCard] {
 
-        max(
-            cards.count -
-            selectedCardIndex,
-            1
-        )
-    }
+        guard
+            !cards.isEmpty,
+            cards.indices.contains(
+                selectedCardIndex
+            )
+        else {
+            return cards
+        }
 
+        let front =
+            Array(
+                cards[
+                    selectedCardIndex...
+                ]
+            )
 
-    private var visibleCardCount:
-        Int {
+        let wrapped =
+            Array(
+                cards.prefix(
+                    selectedCardIndex
+                )
+            )
 
-        min(
-            remainingCardCount,
-            maxVisibleCards
-        )
+        return
+            front +
+            wrapped
     }
 
 
     private var cardStackHeight:
         CGFloat {
 
+        guard cards.count > 1
+        else {
+            return cardHeight
+        }
+
         return
             cardHeight +
             CGFloat(
                 max(
-                    visibleCardCount - 1,
+                    cards.count - 2,
                     0
                 )
-            ) * cardReveal
+            ) * cardReveal +
+            bottomTailReveal
     }
 
 
@@ -280,18 +294,10 @@ struct CardWalletView: View {
 
             ForEach(
                 Array(
-                    cards.enumerated()
+                    stackedCards.enumerated()
                 ),
                 id: \.element.id
-            ) { index, card in
-
-                let relativeIndex =
-                    index -
-                    selectedCardIndex
-
-                if relativeIndex >= 0 &&
-                   relativeIndex <
-                    maxVisibleCards {
+            ) { relativeIndex, card in
 
                     FlippableBankCardView(
                         card:
@@ -308,7 +314,8 @@ struct CardWalletView: View {
                                 0 {
 
                                 selectCard(
-                                    at: index
+                                    cardID:
+                                        card.id
                                 )
                             }
                         }
@@ -335,39 +342,11 @@ struct CardWalletView: View {
                             )
                     )
                     .zIndex(
-                        relativeIndex == 0
-                        ? 100
-                        : Double(
+                        Double(
+                            stackedCards.count -
                             relativeIndex
                         )
                     )
-                    .transition(
-                        .asymmetric(
-                            insertion:
-                                .move(
-                                    edge:
-                                        switchDirection >= 0
-                                        ? .bottom
-                                        : .top
-                                )
-                                .combined(
-                                    with:
-                                        .opacity
-                                ),
-                            removal:
-                                .move(
-                                    edge:
-                                        switchDirection >= 0
-                                        ? .bottom
-                                        : .top
-                                )
-                                .combined(
-                                    with:
-                                        .opacity
-                                )
-                        )
-                    )
-                }
             }
         }
         .frame(
@@ -397,15 +376,46 @@ struct CardWalletView: View {
     }
 
 
+    private func baseCardOffset(
+        relativeIndex:
+            Int
+    ) -> CGFloat {
+
+        guard relativeIndex > 0
+        else {
+            return 0
+        }
+
+        if relativeIndex ==
+            stackedCards.count - 1 {
+
+            return
+                CGFloat(
+                    max(
+                        relativeIndex - 1,
+                        0
+                    )
+                ) * cardReveal +
+                bottomTailReveal
+        }
+
+        return
+            CGFloat(
+                relativeIndex
+            ) * cardReveal
+    }
+
+
     private func cardOffset(
         relativeIndex:
             Int
     ) -> CGFloat {
 
         let base =
-            CGFloat(
-                relativeIndex
-            ) * cardReveal
+            baseCardOffset(
+                relativeIndex:
+                    relativeIndex
+            )
 
 
         if relativeIndex == 0 {
@@ -440,7 +450,7 @@ struct CardWalletView: View {
                 max(
                     dragOffset,
                     -cardReveal
-                ) * 0.34
+                ) * 0.26
         }
 
 
@@ -510,9 +520,6 @@ struct CardWalletView: View {
                 if decisionValue <
                     -55 {
 
-                    switchDirection =
-                        1
-
                     goToNextCard()
 
                 } else if decisionValue >
@@ -525,15 +532,9 @@ struct CardWalletView: View {
 
                         // 第一张卡也能“往下切”：
                         // 顶卡下沉，第二张升到最上面。
-                        switchDirection =
-                            1
-
                         goToNextCard()
 
                     } else {
-
-                        switchDirection =
-                            -1
 
                         goToPreviousCard()
                     }
@@ -575,14 +576,18 @@ struct CardWalletView: View {
 
 
     private func selectCard(
-        at index:
-            Int
+        cardID:
+            UUID
     ) {
 
         guard
-            cards.indices.contains(
-                index
-            )
+            let index =
+                cards.firstIndex(
+                    where: {
+                        $0.id ==
+                            cardID
+                    }
+                )
         else {
             return
         }
@@ -593,11 +598,6 @@ struct CardWalletView: View {
                 dampingFraction: 0.86
             )
         ) {
-
-            switchDirection =
-                index >= selectedCardIndex
-                ? 1
-                : -1
 
             selectedCardIndex =
                 index
@@ -645,7 +645,7 @@ struct CardWalletView: View {
 
             Text(
                 cards.count > 1
-                ? "纵向堆叠 · 上下滑动切卡 · 当前卡始终在最上层"
+                ? "上下滑动切卡 · 切走的卡会回到底部并露出一小截"
                 : "点击银行卡翻转正反面"
             )
 
