@@ -34,10 +34,6 @@ struct CardWalletView: View {
     private var showManageCards =
         false
 
-    @State
-    private var activeCardID:
-        UUID?
-
 
     var body: some View {
 
@@ -54,11 +50,9 @@ struct CardWalletView: View {
 
                 } else {
 
-                    cardStack
+                    cardCarousel
 
-                    stackHint
-
-                    currentCardDetailLink
+                    pageHint
 
                     cardInformation
                 }
@@ -163,182 +157,67 @@ struct CardWalletView: View {
     }
 
 
-    // MARK: 纵向堆叠卡片
+    // MARK: 横向卡片
 
-    private var displayedCards:
-        [BankCard] {
-
-        guard
-            let activeCardID,
-            let activeIndex = cards.firstIndex(
-                where: {
-                    $0.id == activeCardID
-                }
-            )
-        else {
-            return cards
-        }
-
-        var result = cards
-        let activeCard =
-            result.remove(
-                at: activeIndex
-            )
-        result.insert(
-            activeCard,
-            at: 0
-        )
-
-        return result
-    }
-
-
-    private var activeCard:
-        BankCard? {
-
-        if let activeCardID {
-
-            return cards.first {
-                $0.id == activeCardID
-            }
-        }
-
-        return cards.first
-    }
-
-
-    private var cardWidth: CGFloat {
-
-        max(UIScreen.main.bounds.width - 32, 260)
-    }
-
-
-    private var cardHeight: CGFloat {
-
-        cardWidth / BankCardLayout.aspectRatio
-    }
-
-
-    private var collapsedVisibleHeight: CGFloat {
-
-        min(96, cardHeight * 0.32)
-    }
-
-
-    private var cardStack:
+    private var cardCarousel:
         some View {
 
-        ScrollViewReader { proxy in
+        ScrollView(
+            .horizontal
+        ) {
 
-            LazyVStack(
-                spacing: -(cardHeight - collapsedVisibleHeight)
+            LazyHStack(
+                spacing: 16
             ) {
 
                 ForEach(
-                    Array(
-                        displayedCards.enumerated()
-                    ),
-                    id: \.element.id
-                ) { index, card in
+                    cards
+                ) { card in
 
-                    FlippableBankCardView(
-                        card: card,
-                        account:
-                            linkedAccount(
-                                card
-                            ),
-                        allowsFlip:
-                            index == 0,
-                        onTap: {
+                    NavigationLink {
 
-                            guard index > 0
-                            else {
-                                return
-                            }
-
-                            withAnimation(
-                                .spring(
-                                    response: 0.42,
-                                    dampingFraction: 0.88
-                                )
-                            ) {
-                                activeCardID =
-                                    card.id
-                            }
-
-                            DispatchQueue.main.asyncAfter(
-                                deadline: .now() + 0.02
-                            ) {
-                                withAnimation(
-                                    .spring(
-                                        response: 0.42,
-                                        dampingFraction: 0.9
-                                    )
-                                ) {
-                                    proxy.scrollTo(
-                                        card.id,
-                                        anchor: .top
-                                    )
-                                }
-                            }
-                        }
-                    )
-                    .frame(
-                        width: cardWidth,
-                        height: cardHeight
-                    )
-                    .padding(
-                        .horizontal,
-                        16
-                    )
-                    .scaleEffect(
-                        index == 0 ? 1 : 0.985,
-                        anchor: .top
-                    )
-                    .zIndex(
-                        Double(
-                            displayedCards.count - index
+                        CardDetailView(
+                            card: card
                         )
+
+                    } label: {
+
+                        FlippableBankCardView(
+                            card:
+                                card,
+                            account:
+                                linkedAccount(
+                                    card
+                                )
+                        )
+                    }
+                    .buttonStyle(
+                        .plain
                     )
-                    .id(card.id)
+                    .containerRelativeFrame(
+                        .horizontal,
+                        count: 1,
+                        spacing: 16
+                    )
                 }
             }
-            .padding(
-                .top,
-                4
-            )
-            .padding(
-                .bottom,
-                max(18, CGFloat(max(displayedCards.count - 1, 0)) * 10)
-            )
-            .onAppear {
-
-                if activeCardID == nil {
-                    activeCardID =
-                        cards.first?.id
-                }
-            }
-            .onChange(
-                of: cards.map(\.id)
-            ) {
-
-                if let activeCardID,
-                   cards.contains(
-                        where: {
-                            $0.id == activeCardID
-                        }
-                   ) {
-                    return
-                }
-
-                self.activeCardID =
-                    cards.first?.id
-            }
+            .scrollTargetLayout()
         }
+        .contentMargins(
+            .horizontal,
+            20,
+            for: .scrollContent
+        )
+        .scrollTargetBehavior(
+            .viewAligned
+        )
+        .scrollIndicators(
+            .hidden
+        )
     }
 
 
-    private var stackHint:
+    private var pageHint:
         some View {
 
         HStack {
@@ -351,9 +230,7 @@ struct CardWalletView: View {
             )
 
             Text(
-                cards.count > 1
-                ? "上下滑动浏览银行卡，点击下方卡片切换，点击顶部卡片翻转"
-                : "点击银行卡翻转正反面"
+                "左右滑动浏览银行卡"
             )
 
             Spacer()
@@ -362,69 +239,6 @@ struct CardWalletView: View {
         .foregroundStyle(
             .secondary
         )
-        .padding(
-            .horizontal
-        )
-    }
-
-
-    @ViewBuilder
-    private var currentCardDetailLink:
-        some View {
-
-        if let activeCard {
-
-            NavigationLink {
-
-                CardDetailView(
-                    card: activeCard
-                )
-
-            } label: {
-
-                HStack(
-                    spacing: 6
-                ) {
-
-                    Text(
-                        "查看当前卡片详情"
-                    )
-
-                    Image(
-                        systemName:
-                            "chevron.right"
-                    )
-                    .font(.caption.bold())
-                }
-                .font(
-                    .subheadline.weight(
-                        .medium
-                    )
-                )
-                .frame(
-                    maxWidth: .infinity
-                )
-                .padding(
-                    .vertical,
-                    12
-                )
-                .background(
-                    Color(
-                        .secondarySystemBackground
-                    )
-                )
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius: 14,
-                        style: .continuous
-                    )
-                )
-            }
-            .buttonStyle(.plain)
-            .padding(
-                .horizontal
-            )
-        }
     }
 
 
@@ -550,6 +364,7 @@ struct CardWalletView: View {
 }
 
 
+
 // MARK: - 银行卡统一尺寸
 
 private enum BankCardLayout {
@@ -573,29 +388,9 @@ struct FlippableBankCardView: View {
     let account:
         Account?
 
-    let allowsFlip:
-        Bool
-
-    let onTap:
-        (() -> Void)?
-
     @State
-    private var rotation:
-        Double = 0
-
-
-    init(
-        card: BankCard,
-        account: Account?,
-        allowsFlip: Bool = true,
-        onTap: (() -> Void)? = nil
-    ) {
-
-        self.card = card
-        self.account = account
-        self.allowsFlip = allowsFlip
-        self.onTap = onTap
-    }
+    private var flipped =
+        false
 
 
     var body: some View {
@@ -603,14 +398,28 @@ struct FlippableBankCardView: View {
         ZStack {
 
             cardFront
-                .opacity(showingBack ? 0 : 1)
+                .opacity(
+                    flipped
+                    ? 0
+                    : 1
+                )
+
 
             cardBack
-                .scaleEffect(
-                    x: -1,
-                    y: 1
+                .rotation3DEffect(
+                    .degrees(180),
+                    axis:
+                        (
+                            x: 0,
+                            y: 1,
+                            z: 0
+                        )
                 )
-                .opacity(showingBack ? 1 : 0)
+                .opacity(
+                    flipped
+                    ? 1
+                    : 0
+                )
         }
         .aspectRatio(
             BankCardLayout
@@ -618,17 +427,28 @@ struct FlippableBankCardView: View {
             contentMode: .fit
         )
         .rotation3DEffect(
-            .degrees(rotation),
+            .degrees(
+                flipped
+                ? 180
+                : 0
+            ),
             axis:
                 (
                     x: 0,
                     y: 1,
                     z: 0
                 ),
-            perspective: 0.55
+            perspective: 0.7
         )
-        .compositingGroup()
-        .drawingGroup()
+        .animation(
+            .spring(
+                response: 0.48,
+                dampingFraction:
+                    0.82
+            ),
+            value:
+                flipped
+        )
         .contentShape(
             RoundedRectangle(
                 cornerRadius:
@@ -640,38 +460,8 @@ struct FlippableBankCardView: View {
         )
         .onTapGesture {
 
-            if allowsFlip {
-
-                withAnimation(
-                    .easeInOut(
-                        duration: 0.6
-                    )
-                ) {
-                    rotation =
-                        rotation == 0
-                        ? 180
-                        : 0
-                }
-
-            } else {
-
-                onTap?()
-            }
+            flipped.toggle()
         }
-    }
-
-
-    private var showingBack: Bool {
-
-        let normalized =
-            ((rotation.truncatingRemainder(
-                dividingBy: 360
-            )) + 360)
-            .truncatingRemainder(
-                dividingBy: 360
-            )
-
-        return normalized >= 90 && normalized < 270
     }
 
 
@@ -1078,10 +868,12 @@ struct FlippableBankCardView: View {
             .frame(
                 width:
                     geometry
-                        .size.width,
+                        .size
+                        .width,
                 height:
                     geometry
-                        .size.height
+                        .size
+                        .height
             )
             .clipShape(
                 RoundedRectangle(
@@ -1163,7 +955,8 @@ struct FlippableBankCardView: View {
     }
 
 
-    private var creditDateText: String {
+    private var creditDateText:
+        String {
 
         let billing =
             card.billingDay
@@ -1184,7 +977,8 @@ struct FlippableBankCardView: View {
     }
 
 
-    private var formattedLastFour: String {
+    private var formattedLastFour:
+        String {
 
         let clean =
             card
@@ -1460,18 +1254,6 @@ struct AddCardView: View {
                         text:
                             $bankName
                     )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .bankName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
 
 
                     Picker(
@@ -2690,18 +2472,6 @@ struct EditCardView: View {
                         text:
                             $bankName
                     )
-                    .focused(
-                        $focusedField,
-                        equals:
-                            .bankName
-                    )
-                    .submitLabel(
-                        .done
-                    )
-                    .onSubmit {
-                        focusedField =
-                            nil
-                    }
 
 
                     Picker(
