@@ -34,6 +34,21 @@ struct CardWalletView: View {
     private var showManageCards =
         false
 
+    @State
+    private var selectedCardIndex =
+        0
+
+    @State
+    private var dragOffset:
+        CGFloat = 0
+
+
+    private let cardReveal:
+        CGFloat = 76
+
+    private let maxVisibleCards =
+        4
+
 
     var body: some View {
 
@@ -43,7 +58,7 @@ struct CardWalletView: View {
 
             VStack(
                 alignment: .leading,
-                spacing: 22
+                spacing: 20
             ) {
 
                 if cards.isEmpty {
@@ -52,9 +67,11 @@ struct CardWalletView: View {
 
                 } else {
 
-                    verticalCardStack
+                    interactiveCardStack
 
                     stackHint
+
+                    selectedCardDetailLink
 
                     cardInformation
                 }
@@ -121,6 +138,12 @@ struct CardWalletView: View {
 
             CardManagerView()
         }
+        .onChange(
+            of: cards.count
+        ) { _ in
+
+            clampSelectedIndex()
+        }
     }
 
 
@@ -162,13 +185,91 @@ struct CardWalletView: View {
     }
 
 
-    // MARK: 纵向卡片堆叠
+    // MARK: 当前银行卡
 
-    private var verticalCardStack:
+    private var selectedCard:
+        BankCard? {
+
+        guard
+            !cards.isEmpty,
+            cards.indices.contains(
+                selectedCardIndex
+            )
+        else {
+            return nil
+        }
+
+        return cards[
+            selectedCardIndex
+        ]
+    }
+
+
+    // MARK: 卡片尺寸
+
+    private var cardWidth:
+        CGFloat {
+
+        min(
+            max(
+                UIScreen.main.bounds.width -
+                40,
+                280
+            ),
+            520
+        )
+    }
+
+
+    private var cardHeight:
+        CGFloat {
+
+        cardWidth /
+        BankCardLayout.aspectRatio
+    }
+
+
+    private var remainingCardCount:
+        Int {
+
+        max(
+            cards.count -
+            selectedCardIndex,
+            1
+        )
+    }
+
+
+    private var visibleCardCount:
+        Int {
+
+        min(
+            remainingCardCount,
+            maxVisibleCards
+        )
+    }
+
+
+    private var cardStackHeight:
+        CGFloat {
+
+        cardHeight +
+        CGFloat(
+            max(
+                visibleCardCount - 1,
+                0
+            )
+        ) * cardReveal
+    }
+
+
+    // MARK: 真正的纵向堆叠 + 纵向切卡
+
+    private var interactiveCardStack:
         some View {
 
-        LazyVStack(
-            spacing: -145
+        ZStack(
+            alignment: .top
         ) {
 
             ForEach(
@@ -178,38 +279,329 @@ struct CardWalletView: View {
                 id: \.element.id
             ) { index, card in
 
-                FlippableBankCardView(
-                    card:
-                        card,
-                    account:
-                        linkedAccount(
-                            card
+                let relativeIndex =
+                    index -
+                    selectedCardIndex
+
+                if relativeIndex >= 0 &&
+                   relativeIndex <
+                    maxVisibleCards {
+
+                    FlippableBankCardView(
+                        card:
+                            card,
+                        account:
+                            linkedAccount(
+                                card
+                            ),
+                        allowsFlip:
+                            relativeIndex == 0,
+                        onTap: {
+
+                            if relativeIndex >
+                                0 {
+
+                                selectCard(
+                                    at: index
+                                )
+                            }
+                        }
+                    )
+                    .frame(
+                        width:
+                            cardWidth,
+                        height:
+                            cardHeight
+                    )
+                    .scaleEffect(
+                        1 -
+                        CGFloat(
+                            relativeIndex
+                        ) * 0.015,
+                        anchor:
+                            .top
+                    )
+                    .offset(
+                        y:
+                            cardOffset(
+                                relativeIndex:
+                                    relativeIndex
+                            )
+                    )
+                    .zIndex(
+                        Double(
+                            relativeIndex
                         )
-                )
-                .padding(
-                    .horizontal,
-                    20
-                )
-                .zIndex(
-                    Double(index)
-                )
+                    )
+                    .transition(
+                        .asymmetric(
+                            insertion:
+                                .move(
+                                    edge:
+                                        .bottom
+                                )
+                                .combined(
+                                    with:
+                                        .opacity
+                                ),
+                            removal:
+                                .move(
+                                    edge:
+                                        .top
+                                )
+                                .combined(
+                                    with:
+                                        .opacity
+                                )
+                        )
+                    )
+                }
             }
         }
-        .padding(
-            .top,
-            4
+        .frame(
+            maxWidth:
+                .infinity
         )
-        .padding(
-            .bottom,
-            8
+        .frame(
+            height:
+                cardStackHeight,
+            alignment:
+                .top
         )
+        .contentShape(
+            Rectangle()
+        )
+        .highPriorityGesture(
+            cardSwitchGesture
+        )
+        .animation(
+            .spring(
+                response: 0.38,
+                dampingFraction: 0.86
+            ),
+            value:
+                selectedCardIndex
+        )
+    }
+
+
+    private func cardOffset(
+        relativeIndex:
+            Int
+    ) -> CGFloat {
+
+        let base =
+            CGFloat(
+                relativeIndex
+            ) * cardReveal
+
+        guard dragOffset != 0
+        else {
+            return base
+        }
+
+        if dragOffset < 0 {
+
+            let clampedDrag =
+                max(
+                    dragOffset,
+                    -cardReveal
+                )
+
+            if relativeIndex == 0 {
+
+                return
+                    base +
+                    clampedDrag *
+                    0.55
+            }
+
+            return
+                base +
+                clampedDrag *
+                0.40
+        }
+
+
+        let clampedDrag =
+            min(
+                dragOffset,
+                cardReveal
+            )
+
+        if relativeIndex == 0 {
+
+            return
+                base +
+                clampedDrag *
+                0.38
+        }
+
+        return
+            base +
+            clampedDrag *
+            0.12
+    }
+
+
+    private var cardSwitchGesture:
+        some Gesture {
+
+        DragGesture(
+            minimumDistance: 12
+        )
+        .onChanged { value in
+
+            let translation =
+                value.translation.height
+
+            if translation < 0 &&
+               selectedCardIndex >=
+                cards.count - 1 {
+
+                dragOffset =
+                    translation * 0.18
+
+            } else if translation > 0 &&
+                      selectedCardIndex <=
+                        0 {
+
+                dragOffset =
+                    translation * 0.18
+
+            } else {
+
+                dragOffset =
+                    translation
+            }
+        }
+        .onEnded { value in
+
+            let predicted =
+                value
+                    .predictedEndTranslation
+                    .height
+
+            let actual =
+                value
+                    .translation
+                    .height
+
+            let decisionValue =
+                abs(predicted) >
+                abs(actual)
+                ? predicted
+                : actual
+
+            withAnimation(
+                .spring(
+                    response: 0.38,
+                    dampingFraction: 0.86
+                )
+            ) {
+
+                if decisionValue <
+                    -55 {
+
+                    goToNextCard()
+
+                } else if decisionValue >
+                            55 {
+
+                    goToPreviousCard()
+                }
+
+                dragOffset =
+                    0
+            }
+        }
+    }
+
+
+    private func goToNextCard() {
+
+        guard
+            selectedCardIndex <
+            cards.count - 1
+        else {
+            return
+        }
+
+        selectedCardIndex +=
+            1
+    }
+
+
+    private func goToPreviousCard() {
+
+        guard
+            selectedCardIndex >
+            0
+        else {
+            return
+        }
+
+        selectedCardIndex -=
+            1
+    }
+
+
+    private func selectCard(
+        at index:
+            Int
+    ) {
+
+        guard
+            cards.indices.contains(
+                index
+            )
+        else {
+            return
+        }
+
+        withAnimation(
+            .spring(
+                response: 0.38,
+                dampingFraction: 0.86
+            )
+        ) {
+
+            selectedCardIndex =
+                index
+
+            dragOffset =
+                0
+        }
+    }
+
+
+    private func clampSelectedIndex() {
+
+        if cards.isEmpty {
+
+            selectedCardIndex =
+                0
+
+            return
+        }
+
+        selectedCardIndex =
+            min(
+                max(
+                    selectedCardIndex,
+                    0
+                ),
+                cards.count - 1
+            )
     }
 
 
     private var stackHint:
         some View {
 
-        HStack {
+        HStack(
+            spacing: 6
+        ) {
 
             Spacer()
 
@@ -220,9 +612,20 @@ struct CardWalletView: View {
 
             Text(
                 cards.count > 1
-                ? "上下滑动浏览银行卡 · 点击卡片翻转"
+                ? "卡片区域上下滑动切换 · 点击下方卡片也可切换"
                 : "点击银行卡翻转正反面"
             )
+
+            if cards.count >
+                1 {
+
+                Text(
+                    "\(selectedCardIndex + 1)/\(cards.count)"
+                )
+                .fontWeight(
+                    .semibold
+                )
+            }
 
             Spacer()
         }
@@ -238,7 +641,105 @@ struct CardWalletView: View {
     }
 
 
-    // MARK: 简单统计
+    @ViewBuilder
+    private var selectedCardDetailLink:
+        some View {
+
+        if let selectedCard {
+
+            NavigationLink {
+
+                CardDetailView(
+                    card:
+                        selectedCard
+                )
+
+            } label: {
+
+                HStack {
+
+                    Image(
+                        systemName:
+                            selectedCard
+                                .cardType
+                                .icon
+                    )
+
+                    VStack(
+                        alignment:
+                            .leading,
+                        spacing: 2
+                    ) {
+
+                        Text(
+                            selectedCard
+                                .bankName
+                        )
+                        .fontWeight(
+                            .medium
+                        )
+
+                        Text(
+                            "•••• \(selectedCard.lastFourDigits)"
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
+
+                    Spacer()
+
+                    Text(
+                        "查看详情"
+                    )
+                    .font(
+                        .subheadline
+                    )
+
+                    Image(
+                        systemName:
+                            "chevron.right"
+                    )
+                    .font(
+                        .caption.bold()
+                    )
+                }
+                .padding(
+                    .horizontal,
+                    16
+                )
+                .padding(
+                    .vertical,
+                    12
+                )
+                .background(
+                    Color(
+                        .secondarySystemBackground
+                    )
+                )
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius: 16,
+                        style:
+                            .continuous
+                    )
+                )
+            }
+            .buttonStyle(
+                .plain
+            )
+            .padding(
+                .horizontal,
+                20
+            )
+        }
+    }
+
+
+    // MARK: 卡片概览
 
     private var cardInformation:
         some View {
@@ -312,13 +813,15 @@ struct CardWalletView: View {
                 .title2.bold()
             )
 
-            Text(title)
-                .font(
-                    .caption
-                )
-                .foregroundStyle(
-                    .secondary
-                )
+            Text(
+                title
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
         }
         .frame(
             maxWidth:
@@ -385,9 +888,36 @@ struct FlippableBankCardView: View {
     let account:
         Account?
 
+    let allowsFlip:
+        Bool
+
+    let onTap:
+        (() -> Void)?
+
     @State
     private var flipped =
         false
+
+
+    init(
+        card: BankCard,
+        account: Account?,
+        allowsFlip: Bool = true,
+        onTap: (() -> Void)? = nil
+    ) {
+
+        self.card =
+            card
+
+        self.account =
+            account
+
+        self.allowsFlip =
+            allowsFlip
+
+        self.onTap =
+            onTap
+    }
 
 
     var body: some View {
@@ -457,13 +987,31 @@ struct FlippableBankCardView: View {
         )
         .onTapGesture {
 
-            withAnimation(
-                .easeInOut(
-                    duration: 0.48
-                )
-            ) {
+            if allowsFlip {
 
-                flipped.toggle()
+                withAnimation(
+                    .easeInOut(
+                        duration:
+                            0.48
+                    )
+                ) {
+
+                    flipped.toggle()
+                }
+
+            } else {
+
+                onTap?()
+            }
+        }
+        .onChange(
+            of: allowsFlip
+        ) { newValue in
+
+            if !newValue {
+
+                flipped =
+                    false
             }
         }
     }
