@@ -258,13 +258,17 @@ struct CardWalletView: View {
     private var cardStackHeight:
         CGFloat {
 
-        cardHeight +
-        CGFloat(
-            max(
-                visibleCardCount - 1,
-                0
-            )
-        ) * cardReveal
+        guard visibleCardCount > 1
+        else {
+            return cardHeight
+        }
+
+        return
+            cardHeight +
+            12 +
+            CGFloat(
+                visibleCardCount - 1
+            ) * cardReveal
     }
 
 
@@ -326,6 +330,19 @@ struct CardWalletView: View {
                         anchor:
                             .top
                     )
+                    .mask(
+                        alignment:
+                            .top
+                    ) {
+
+                        Rectangle()
+                            .frame(
+                                height:
+                                    relativeIndex == 0
+                                    ? cardHeight
+                                    : cardReveal
+                            )
+                    }
                     .offset(
                         y:
                             cardOffset(
@@ -334,7 +351,9 @@ struct CardWalletView: View {
                             )
                     )
                     .zIndex(
-                        Double(
+                        relativeIndex == 0
+                        ? 100
+                        : Double(
                             relativeIndex
                         )
                     )
@@ -399,57 +418,56 @@ struct CardWalletView: View {
             Int
     ) -> CGFloat {
 
+        if relativeIndex == 0 {
+
+            if dragOffset < 0 {
+
+                return
+                    max(
+                        dragOffset,
+                        -cardReveal
+                    ) * 0.55
+            }
+
+            return
+                min(
+                    dragOffset,
+                    cardReveal * 1.35
+                ) * 0.72
+        }
+
+
         let base =
+            cardHeight +
+            12 +
             CGFloat(
-                relativeIndex
+                relativeIndex - 1
             ) * cardReveal
+
 
         guard dragOffset != 0
         else {
             return base
         }
 
+
         if dragOffset < 0 {
 
-            let clampedDrag =
+            return
+                base +
                 max(
                     dragOffset,
                     -cardReveal
-                )
-
-            if relativeIndex == 0 {
-
-                return
-                    base +
-                    clampedDrag *
-                    0.55
-            }
-
-            return
-                base +
-                clampedDrag *
-                0.40
+                ) * 0.50
         }
 
-
-        let clampedDrag =
-            min(
-                dragOffset,
-                cardReveal
-            )
-
-        if relativeIndex == 0 {
-
-            return
-                base +
-                clampedDrag *
-                0.38
-        }
 
         return
             base +
-            clampedDrag *
-            0.12
+            min(
+                dragOffset,
+                cardReveal
+            ) * 0.10
     }
 
 
@@ -645,7 +663,7 @@ struct CardWalletView: View {
 
             Text(
                 cards.count > 1
-                ? "上下滑动切卡 · 顶部第一张也可下拉切到下一张"
+                ? "当前卡完整置顶 · 卡片区域上下滑动切换"
                 : "点击银行卡翻转正反面"
             )
 

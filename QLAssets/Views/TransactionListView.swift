@@ -243,7 +243,7 @@ struct TransactionRowView: View {
         }
 
         return
-            "\(accountText) · \(transaction.date.formatted(date: .abbreviated, time: .shortened))"
+            "\(accountText) · \(AppTime.listDateTime(transaction.date))"
     }
 
 
@@ -408,13 +408,9 @@ struct TransactionDetailView: View {
                 ) {
 
                     Text(
-                        transaction.date
-                            .formatted(
-                                date:
-                                    .long,
-                                time:
-                                    .shortened
-                            )
+                        AppTime.detailDateTime(
+                            transaction.date
+                        )
                     )
                 }
             }

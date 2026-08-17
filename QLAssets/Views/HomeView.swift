@@ -32,7 +32,7 @@ struct HomeView: View {
 
                 $0.type == .expense &&
 
-                Calendar.current.isDate(
+                AppTime.calendar.isDate(
                     $0.date,
                     equalTo: Date(),
                     toGranularity: .month
@@ -51,7 +51,7 @@ struct HomeView: View {
 
                 $0.type == .income &&
 
-                Calendar.current.isDate(
+                AppTime.calendar.isDate(
                     $0.date,
                     equalTo: Date(),
                     toGranularity: .month
