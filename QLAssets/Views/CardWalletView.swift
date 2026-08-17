@@ -37,11 +37,13 @@ struct CardWalletView: View {
 
     var body: some View {
 
-        ScrollView {
+        ScrollView(
+            .vertical
+        ) {
 
             VStack(
                 alignment: .leading,
-                spacing: 24
+                spacing: 22
             ) {
 
                 if cards.isEmpty {
@@ -50,9 +52,9 @@ struct CardWalletView: View {
 
                 } else {
 
-                    cardCarousel
+                    verticalCardStack
 
-                    pageHint
+                    stackHint
 
                     cardInformation
                 }
@@ -61,6 +63,9 @@ struct CardWalletView: View {
                 .vertical
             )
         }
+        .scrollIndicators(
+            .hidden
+        )
         .navigationTitle(
             "卡包"
         )
@@ -157,67 +162,51 @@ struct CardWalletView: View {
     }
 
 
-    // MARK: 横向卡片
+    // MARK: 纵向卡片堆叠
 
-    private var cardCarousel:
+    private var verticalCardStack:
         some View {
 
-        ScrollView(
-            .horizontal
+        LazyVStack(
+            spacing: -145
         ) {
 
-            LazyHStack(
-                spacing: 16
-            ) {
+            ForEach(
+                Array(
+                    cards.enumerated()
+                ),
+                id: \.element.id
+            ) { index, card in
 
-                ForEach(
-                    cards
-                ) { card in
-
-                    NavigationLink {
-
-                        CardDetailView(
-                            card: card
+                FlippableBankCardView(
+                    card:
+                        card,
+                    account:
+                        linkedAccount(
+                            card
                         )
-
-                    } label: {
-
-                        FlippableBankCardView(
-                            card:
-                                card,
-                            account:
-                                linkedAccount(
-                                    card
-                                )
-                        )
-                    }
-                    .buttonStyle(
-                        .plain
-                    )
-                    .containerRelativeFrame(
-                        .horizontal,
-                        count: 1,
-                        spacing: 16
-                    )
-                }
+                )
+                .padding(
+                    .horizontal,
+                    20
+                )
+                .zIndex(
+                    Double(index)
+                )
             }
-            .scrollTargetLayout()
         }
-        .contentMargins(
-            .horizontal,
-            20,
-            for: .scrollContent
+        .padding(
+            .top,
+            4
         )
-        .scrollTargetBehavior(
-            .viewAligned
-        )
-        .scrollIndicators(
-            .hidden
+        .padding(
+            .bottom,
+            8
         )
     }
 
 
-    private var pageHint:
+    private var stackHint:
         some View {
 
         HStack {
@@ -230,14 +219,21 @@ struct CardWalletView: View {
             )
 
             Text(
-                "左右滑动浏览银行卡"
+                cards.count > 1
+                ? "上下滑动浏览银行卡 · 点击卡片翻转"
+                : "点击银行卡翻转正反面"
             )
 
             Spacer()
         }
-        .font(.caption)
+        .font(
+            .caption
+        )
         .foregroundStyle(
             .secondary
+        )
+        .padding(
+            .horizontal
         )
     }
 
@@ -317,7 +313,9 @@ struct CardWalletView: View {
             )
 
             Text(title)
-                .font(.caption)
+                .font(
+                    .caption
+                )
                 .foregroundStyle(
                     .secondary
                 )
@@ -364,7 +362,6 @@ struct CardWalletView: View {
 }
 
 
-
 // MARK: - 银行卡统一尺寸
 
 private enum BankCardLayout {
@@ -398,6 +395,21 @@ struct FlippableBankCardView: View {
         ZStack {
 
             cardFront
+                .rotation3DEffect(
+                    .degrees(
+                        flipped
+                        ? 180
+                        : 0
+                    ),
+                    axis:
+                        (
+                            x: 0,
+                            y: 1,
+                            z: 0
+                        ),
+                    perspective:
+                        0.65
+                )
                 .opacity(
                     flipped
                     ? 0
@@ -407,13 +419,19 @@ struct FlippableBankCardView: View {
 
             cardBack
                 .rotation3DEffect(
-                    .degrees(180),
+                    .degrees(
+                        flipped
+                        ? 0
+                        : -180
+                    ),
                     axis:
                         (
                             x: 0,
                             y: 1,
                             z: 0
-                        )
+                        ),
+                    perspective:
+                        0.65
                 )
                 .opacity(
                     flipped
@@ -424,31 +442,10 @@ struct FlippableBankCardView: View {
         .aspectRatio(
             BankCardLayout
                 .aspectRatio,
-            contentMode: .fit
+            contentMode:
+                .fit
         )
-        .rotation3DEffect(
-            .degrees(
-                flipped
-                ? 180
-                : 0
-            ),
-            axis:
-                (
-                    x: 0,
-                    y: 1,
-                    z: 0
-                ),
-            perspective: 0.7
-        )
-        .animation(
-            .spring(
-                response: 0.48,
-                dampingFraction:
-                    0.82
-            ),
-            value:
-                flipped
-        )
+        .compositingGroup()
         .contentShape(
             RoundedRectangle(
                 cornerRadius:
@@ -460,7 +457,14 @@ struct FlippableBankCardView: View {
         )
         .onTapGesture {
 
-            flipped.toggle()
+            withAnimation(
+                .easeInOut(
+                    duration: 0.48
+                )
+            ) {
+
+                flipped.toggle()
+            }
         }
     }
 
@@ -1254,6 +1258,18 @@ struct AddCardView: View {
                         text:
                             $bankName
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .bankName
+                    )
+                    .submitLabel(
+                        .done
+                    )
+                    .onSubmit {
+                        focusedField =
+                            nil
+                    }
 
 
                     Picker(
@@ -2472,6 +2488,18 @@ struct EditCardView: View {
                         text:
                             $bankName
                     )
+                    .focused(
+                        $focusedField,
+                        equals:
+                            .bankName
+                    )
+                    .submitLabel(
+                        .done
+                    )
+                    .onSubmit {
+                        focusedField =
+                            nil
+                    }
 
 
                     Picker(
