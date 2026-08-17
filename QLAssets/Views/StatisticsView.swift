@@ -2274,7 +2274,7 @@ private struct StatisticsTransactionRow: View {
             return "-\(amount)"
 
         case .transfer,
-             .creditPayment,
+             .creditRepayment,
              .adjustment:
 
             return amount
