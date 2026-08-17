@@ -38,9 +38,13 @@ struct CardWalletView: View {
     private var selectedCardIndex =
         0
 
-    @State
+    @GestureState
     private var dragOffset:
         CGFloat = 0
+
+    @GestureState
+    private var isCardDragging =
+        false
 
 
 
@@ -50,6 +54,9 @@ struct CardWalletView: View {
 
     private let bottomTailReveal:
         CGFloat = 38
+
+    private let maxRenderedCards =
+        5
 
 
     var body: some View {
@@ -84,6 +91,9 @@ struct CardWalletView: View {
         }
         .scrollIndicators(
             .hidden
+        )
+        .scrollDisabled(
+            isCardDragging
         )
         .navigationTitle(
             "卡包"
@@ -263,10 +273,39 @@ struct CardWalletView: View {
     }
 
 
+    private var visibleStackedCards:
+        [BankCard] {
+
+        guard stackedCards.count >
+                maxRenderedCards
+        else {
+            return stackedCards
+        }
+
+        let frontCards =
+            Array(
+                stackedCards.prefix(
+                    maxRenderedCards - 1
+                )
+            )
+
+        guard
+            let tailCard =
+                stackedCards.last
+        else {
+            return frontCards
+        }
+
+        return
+            frontCards +
+            [tailCard]
+    }
+
+
     private var cardStackHeight:
         CGFloat {
 
-        guard cards.count > 1
+        guard visibleStackedCards.count > 1
         else {
             return cardHeight
         }
@@ -275,7 +314,7 @@ struct CardWalletView: View {
             cardHeight +
             CGFloat(
                 max(
-                    cards.count - 2,
+                    visibleStackedCards.count - 2,
                     0
                 )
             ) * cardReveal +
@@ -294,7 +333,7 @@ struct CardWalletView: View {
 
             ForEach(
                 Array(
-                    stackedCards.enumerated()
+                    visibleStackedCards.enumerated()
                 ),
                 id: \.element.id
             ) { relativeIndex, card in
@@ -343,7 +382,7 @@ struct CardWalletView: View {
                     )
                     .zIndex(
                         Double(
-                            stackedCards.count -
+                            visibleStackedCards.count -
                             relativeIndex
                         )
                     )
@@ -366,9 +405,10 @@ struct CardWalletView: View {
             cardSwitchGesture
         )
         .animation(
-            .spring(
-                response: 0.38,
-                dampingFraction: 0.86
+            .interactiveSpring(
+                response: 0.28,
+                dampingFraction: 0.92,
+                blendDuration: 0.06
             ),
             value:
                 selectedCardIndex
@@ -387,7 +427,7 @@ struct CardWalletView: View {
         }
 
         if relativeIndex ==
-            stackedCards.count - 1 {
+            visibleStackedCards.count - 1 {
 
             return
                 CGFloat(
@@ -467,32 +507,28 @@ struct CardWalletView: View {
         some Gesture {
 
         DragGesture(
-            minimumDistance: 12
+            minimumDistance: 8
         )
-        .onChanged { value in
+        .updating(
+            $dragOffset
+        ) { value, state, _ in
 
-            let translation =
+            state =
                 value.translation.height
+        }
+        .updating(
+            $isCardDragging
+        ) { _, state, _ in
 
-            if translation < 0 &&
-               selectedCardIndex >=
-                cards.count - 1 {
-
-                // 最后一张向上拖时保留轻微回弹，
-                // 避免直接把卡拖出卡组。
-                dragOffset =
-                    translation * 0.18
-
-            } else {
-
-                // 第一张向下拖也允许完整跟手。
-                // 松手超过阈值后，会把当前顶卡切到下面，
-                // 下一张卡自动顶上来。
-                dragOffset =
-                    translation
-            }
+            state =
+                true
         }
         .onEnded { value in
+
+            guard cards.count > 1
+            else {
+                return
+            }
 
             let predicted =
                 value
@@ -510,38 +546,33 @@ struct CardWalletView: View {
                 ? predicted
                 : actual
 
-            withAnimation(
-                .spring(
-                    response: 0.38,
-                    dampingFraction: 0.86
-                )
-            ) {
+            if decisionValue <
+                -48 {
 
-                if decisionValue <
-                    -55 {
+                withAnimation(
+                    .interactiveSpring(
+                        response: 0.28,
+                        dampingFraction: 0.92,
+                        blendDuration: 0.06
+                    )
+                ) {
 
                     goToNextCard()
-
-                } else if decisionValue >
-                            55 {
-
-                    if selectedCardIndex ==
-                        0 &&
-                       cards.count >
-                        1 {
-
-                        // 第一张卡也能“往下切”：
-                        // 顶卡下沉，第二张升到最上面。
-                        goToNextCard()
-
-                    } else {
-
-                        goToPreviousCard()
-                    }
                 }
 
-                dragOffset =
-                    0
+            } else if decisionValue >
+                        48 {
+
+                withAnimation(
+                    .interactiveSpring(
+                        response: 0.28,
+                        dampingFraction: 0.92,
+                        blendDuration: 0.06
+                    )
+                ) {
+
+                    goToPreviousCard()
+                }
             }
         }
     }
@@ -549,29 +580,34 @@ struct CardWalletView: View {
 
     private func goToNextCard() {
 
-        guard
-            selectedCardIndex <
-            cards.count - 1
+        guard cards.count > 1
         else {
             return
         }
 
-        selectedCardIndex +=
-            1
+        selectedCardIndex =
+            (
+                selectedCardIndex +
+                1
+            ) %
+            cards.count
     }
 
 
     private func goToPreviousCard() {
 
-        guard
-            selectedCardIndex >
-            0
+        guard cards.count > 1
         else {
             return
         }
 
-        selectedCardIndex -=
-            1
+        selectedCardIndex =
+            (
+                selectedCardIndex -
+                1 +
+                cards.count
+            ) %
+            cards.count
     }
 
 
@@ -601,9 +637,6 @@ struct CardWalletView: View {
 
             selectedCardIndex =
                 index
-
-            dragOffset =
-                0
         }
     }
 
@@ -645,7 +678,7 @@ struct CardWalletView: View {
 
             Text(
                 cards.count > 1
-                ? "上下滑动切卡 · 切走的卡会回到底部并露出一小截"
+                ? "上下均可循环切卡 · 底部始终保留尾卡"
                 : "点击银行卡翻转正反面"
             )
 
