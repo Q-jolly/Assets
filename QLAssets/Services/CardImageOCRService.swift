@@ -162,6 +162,41 @@ enum CardImageOCRService {
             )
 
 
+        var lastFourDigits =
+            cardNumber.map {
+                String(
+                    $0.suffix(4)
+                )
+            }
+
+
+        // Apple Wallet / 银行 App 截图经常只展示：
+        // •••• 6098
+        //
+        // 这种图片本身没有完整 13~19 位卡号，
+        // 所以完整 PAN 识别失败后，需要单独识别可见后四位。
+        if lastFourDigits == nil {
+
+            lastFourDigits =
+                findBestVisibleLastFour(
+                    in:
+                        observations
+                )
+        }
+
+
+        // 再做一次针对银行卡下半部的低阈值 OCR。
+        // 对小字号、白色数字、复杂卡面更友好。
+        if lastFourDigits == nil {
+
+            lastFourDigits =
+                recognizeVisibleLastFourRegion(
+                    in:
+                        cgImage
+                )
+        }
+
+
         return BankCardOCRResult(
             bankName:
                 detectBankName(
@@ -169,11 +204,7 @@ enum CardImageOCRService {
                         fullText
                 ),
             lastFourDigits:
-                cardNumber.map {
-                    String(
-                        $0.suffix(4)
-                    )
-                },
+                lastFourDigits,
             cardType:
                 detectCardType(
                     in:
@@ -455,6 +486,391 @@ enum CardImageOCRService {
         }
 
         return nil
+    }
+
+
+    // MARK: - 可见后四位识别
+
+    private struct LastFourCandidate {
+
+        let digits:
+            String
+
+        let score:
+            Int
+    }
+
+
+    private static func findBestVisibleLastFour(
+        in observations:
+            [VNRecognizedTextObservation]
+    ) -> String? {
+
+        var candidates:
+            [LastFourCandidate] = []
+
+
+        for observation in observations {
+
+            guard
+                let candidate =
+                    observation
+                        .topCandidates(1)
+                        .first
+            else {
+
+                continue
+            }
+
+
+            let originalText =
+                candidate.string
+
+            let normalizedText =
+                normalizePotentialCardNumber(
+                    originalText
+                )
+
+
+            for digits in fourDigitGroups(
+                in:
+                    normalizedText
+            ) {
+
+                var score =
+                    0
+
+
+                let upper =
+                    originalText
+                        .uppercased()
+
+
+                // 带掩码字符 + 4 位数字，是最可靠的银行卡后四位形式。
+                if containsCardMask(
+                    originalText
+                ) {
+
+                    score +=
+                        120
+                }
+
+
+                // 单独一组 4 位数字也很常见。
+                if asciiDigits(
+                    in:
+                        normalizedText
+                ) ==
+                    digits {
+
+                    score +=
+                        35
+                }
+
+
+                // Vision 坐标原点在左下角。
+                // 银行卡号后四位大多位于卡面中下部。
+                let centerY =
+                    observation
+                        .boundingBox
+                        .midY
+
+                if centerY <
+                    0.58 {
+
+                    score +=
+                        40
+                }
+
+
+                let centerX =
+                    observation
+                        .boundingBox
+                        .midX
+
+                if centerX <
+                    0.78 {
+
+                    score +=
+                        15
+                }
+
+
+                // 排除有效期、CVV 等容易误判的数字。
+                if upper.contains(
+                    "VALID"
+                ) ||
+                   upper.contains(
+                    "THRU"
+                ) ||
+                   upper.contains(
+                    "GOOD THRU"
+                ) ||
+                   upper.contains(
+                    "EXP"
+                ) ||
+                   upper.contains(
+                    "有效期"
+                ) ||
+                   upper.contains(
+                    "CVV"
+                ) ||
+                   upper.contains(
+                    "CVC"
+                ) {
+
+                    score -=
+                        120
+                }
+
+
+                if originalText.contains(
+                    "/"
+                ) {
+
+                    score -=
+                        90
+                }
+
+
+                if looksLikeYear(
+                    digits
+                ) {
+
+                    score -=
+                        55
+                }
+
+
+                candidates.append(
+                    LastFourCandidate(
+                        digits:
+                            digits,
+                        score:
+                            score
+                    )
+                )
+            }
+        }
+
+
+        return candidates
+            .sorted {
+                if $0.score !=
+                    $1.score {
+
+                    return
+                        $0.score >
+                        $1.score
+                }
+
+                return
+                    $0.digits <
+                    $1.digits
+            }
+            .first {
+                $0.score >=
+                    20
+            }?
+            .digits
+    }
+
+
+    private static func recognizeVisibleLastFourRegion(
+        in cgImage:
+            CGImage
+    ) -> String? {
+
+        let request =
+            VNRecognizeTextRequest()
+
+        request.recognitionLevel =
+            .accurate
+
+        request.usesLanguageCorrection =
+            false
+
+        request.recognitionLanguages =
+            [
+                "en-US"
+            ]
+
+        request.minimumTextHeight =
+            0.004
+
+
+        // 银行卡卡号通常在中下部。
+        // 避开顶部银行名和右下角大部分卡组织 Logo，
+        // 同时覆盖 Apple Wallet 常见的左下角后四位。
+        request.regionOfInterest =
+            CGRect(
+                x:
+                    0.02,
+                y:
+                    0.02,
+                width:
+                    0.90,
+                height:
+                    0.62
+            )
+
+
+        let handler =
+            VNImageRequestHandler(
+                cgImage:
+                    cgImage,
+                orientation:
+                    .up,
+                options:
+                    [:]
+            )
+
+
+        do {
+
+            try handler.perform(
+                [request]
+            )
+
+        } catch {
+
+            return nil
+        }
+
+
+        return findBestVisibleLastFour(
+            in:
+                request.results
+                ?? []
+        )
+    }
+
+
+    private static func fourDigitGroups(
+        in text:
+            String
+    ) -> [String] {
+
+        let pattern =
+            #"(?<![0-9])[0-9]{4}(?![0-9])"#
+
+
+        guard
+            let regex =
+                try? NSRegularExpression(
+                    pattern:
+                        pattern
+                )
+        else {
+
+            return []
+        }
+
+
+        let range =
+            NSRange(
+                text.startIndex...,
+                in:
+                    text
+            )
+
+
+        return regex
+            .matches(
+                in:
+                    text,
+                range:
+                    range
+            )
+            .compactMap { match in
+
+                guard
+                    let swiftRange =
+                        Range(
+                            match.range,
+                            in:
+                                text
+                        )
+                else {
+
+                    return nil
+                }
+
+
+                return String(
+                    text[
+                        swiftRange
+                    ]
+                )
+            }
+    }
+
+
+    private static func containsCardMask(
+        _ text:
+            String
+    ) -> Bool {
+
+        let maskCharacters =
+            CharacterSet(
+                charactersIn:
+                    "•●·*＊xX×••••"
+            )
+
+
+        let maskCount =
+            text.unicodeScalars
+                .filter {
+                    maskCharacters
+                        .contains(
+                            $0
+                        )
+                }
+                .count
+
+
+        if maskCount >=
+            2 {
+
+            return true
+        }
+
+
+        // 某些 OCR 会把四个圆点识别成普通句点。
+        if text.contains(
+            "...."
+        ) ||
+           text.contains(
+            "····"
+        ) {
+
+            return true
+        }
+
+
+        return false
+    }
+
+
+    private static func looksLikeYear(
+        _ digits:
+            String
+    ) -> Bool {
+
+        guard
+            let value =
+                Int(
+                    digits
+                )
+        else {
+
+            return false
+        }
+
+
+        return
+            value >= 1900 &&
+            value <= 2099
     }
 
 
