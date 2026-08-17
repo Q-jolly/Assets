@@ -273,9 +273,9 @@ enum CardImageProcessor {
         func point(
             _ normalized:
                 CGPoint
-        ) -> CIVector {
+        ) -> CGPoint {
 
-            CIVector(
+            CGPoint(
                 x:
                     normalized.x *
                     width,
