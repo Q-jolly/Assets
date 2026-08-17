@@ -23,6 +23,12 @@ struct HomeView: View {
     private var transactions:
         [TransactionRecord]
 
+    @AppStorage(
+        "monthlyBudgetCNY"
+    )
+    private var monthlyBudget:
+        Double = 0
+
 
     // MARK: - 资产统计
 
@@ -107,6 +113,22 @@ struct HomeView: View {
     }
 
 
+    private var budgetProgress:
+        Double {
+
+        guard monthlyBudget > 0
+        else {
+            return 0
+        }
+
+        return min(
+            monthlyExpense /
+            monthlyBudget,
+            1
+        )
+    }
+
+
     var body: some View {
 
         ScrollView {
@@ -136,6 +158,8 @@ struct HomeView: View {
                             monthlyIncome
                     )
                 }
+
+                statisticsEntry
 
                 if !creditCards.isEmpty {
 
@@ -338,6 +362,106 @@ struct HomeView: View {
                 cornerRadius: 16,
                 style: .continuous
             )
+        )
+    }
+
+
+    // MARK: - 统计入口
+
+    private var statisticsEntry:
+        some View {
+
+        NavigationLink {
+
+            StatisticsView()
+
+        } label: {
+
+            VStack(
+                alignment: .leading,
+                spacing: 12
+            ) {
+
+                HStack {
+
+                    Label(
+                        "本月分析",
+                        systemImage:
+                            "chart.xyaxis.line"
+                    )
+                    .font(
+                        .headline
+                    )
+
+                    Spacer()
+
+                    Image(
+                        systemName:
+                            "chevron.right"
+                    )
+                    .font(
+                        .caption.bold()
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+
+
+                if monthlyBudget > 0 {
+
+                    ProgressView(
+                        value:
+                            budgetProgress
+                    )
+
+                    HStack {
+
+                        Text(
+                            "预算使用"
+                        )
+
+                        Spacer()
+
+                        Text(
+                            "¥\(monthlyExpense.formatted(.number.precision(.fractionLength(0)))) / ¥\(monthlyBudget.formatted(.number.precision(.fractionLength(0))))"
+                        )
+                    }
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                } else {
+
+                    Text(
+                        "查看支出分类、每日趋势、近 6 个月收支，并设置月度预算"
+                    )
+                    .font(
+                        .subheadline
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+            }
+            .padding()
+            .background(
+                Color(
+                    .secondarySystemBackground
+                )
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius: 20,
+                    style: .continuous
+                )
+            )
+        }
+        .buttonStyle(
+            .plain
         )
     }
 
