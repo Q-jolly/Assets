@@ -92,6 +92,10 @@ struct TransactionListView:
         false
 
     @State
+    private var showImporter =
+        false
+
+    @State
     private var selectedType =
         "全部类型"
 
@@ -495,6 +499,24 @@ struct TransactionListView:
 
                     Button {
 
+                        showImporter =
+                            true
+
+                    } label: {
+
+                        Label(
+                            "导入账单",
+                            systemImage:
+                                "square.and.arrow.down"
+                        )
+                    }
+
+
+                    Divider()
+
+
+                    Button {
+
                         prepareCSVExport(
                             transactions:
                                 filteredTransactions,
@@ -542,7 +564,7 @@ struct TransactionListView:
 
                     Image(
                         systemName:
-                            "square.and.arrow.up"
+                            "arrow.up.arrow.down.square"
                     )
                 }
 
@@ -840,6 +862,13 @@ struct TransactionListView:
                     }
                 }
             }
+        }
+        .sheet(
+            isPresented:
+                $showImporter
+        ) {
+
+            TransactionImportView()
         }
         .fileExporter(
             isPresented:
