@@ -3230,11 +3230,11 @@ private struct CategoryDonutBreakdownView: View {
             }
 
 
-        let labelGap:
-            CGFloat = 8
-
         let sidePadding:
-            CGFloat = 12
+            CGFloat = 14
+
+        let labelInsetFromLineEnd:
+            CGFloat = 6
 
         let maxLeftWidth =
             rawSeeds
@@ -3256,32 +3256,30 @@ private struct CategoryDonutBreakdownView: View {
                 }
                 .max() ?? 0
 
-        let leftLabelRightX =
+        let desiredLeftLineEndX =
+            center.x -
+            outerRadius -
+            54
+
+        let desiredRightLineEndX =
+            center.x +
+            outerRadius +
+            54
+
+        let leftLineEndX =
             max(
                 maxLeftWidth +
                 sidePadding,
-                center.x -
-                outerRadius +
-                8
+                desiredLeftLineEndX
             )
 
-        let rightLabelLeftX =
+        let rightLineEndX =
             min(
                 bounds.width -
                 maxRightWidth -
                 sidePadding,
-                center.x +
-                outerRadius -
-                8
+                desiredRightLineEndX
             )
-
-        let leftLineEndX =
-            leftLabelRightX +
-            labelGap
-
-        let rightLineEndX =
-            rightLabelLeftX -
-            labelGap
 
         let rawLayouts =
             rawSeeds.map { seed in
@@ -3294,11 +3292,13 @@ private struct CategoryDonutBreakdownView: View {
                 let textAnchorX =
                     seed.isRightSide
                     ? (
-                        rightLabelLeftX +
+                        endX +
+                        labelInsetFromLineEnd +
                         seed.labelWidth / 2
                     )
                     : (
-                        leftLabelRightX -
+                        endX -
+                        labelInsetFromLineEnd -
                         seed.labelWidth / 2
                     )
 
@@ -3306,57 +3306,31 @@ private struct CategoryDonutBreakdownView: View {
 
                 if seed.isRightSide {
 
-                    let lowerBound =
-                        seed.start.x + 10
-
-                    let upperBound =
-                        endX - 14
-
                     let preferred =
-                        seed.start.x + 26
+                        seed.start.x + 28
 
-                    if lowerBound < upperBound {
+                    let maxBend =
+                        endX - 42
 
-                        bendX = min(
-                            max(
-                                preferred,
-                                lowerBound
-                            ),
-                            upperBound
+                    bendX =
+                        min(
+                            preferred,
+                            maxBend
                         )
-
-                    } else {
-
-                        bendX =
-                            (seed.start.x + endX) / 2
-                    }
 
                 } else {
 
-                    let lowerBound =
-                        endX + 14
-
-                    let upperBound =
-                        seed.start.x - 10
-
                     let preferred =
-                        seed.start.x - 26
+                        seed.start.x - 28
 
-                    if lowerBound < upperBound {
+                    let minBend =
+                        endX + 42
 
-                        bendX = min(
-                            max(
-                                preferred,
-                                lowerBound
-                            ),
-                            upperBound
+                    bendX =
+                        max(
+                            preferred,
+                            minBend
                         )
-
-                    } else {
-
-                        bendX =
-                            (seed.start.x + endX) / 2
-                    }
                 }
 
                 return CategoryCalloutLayout(
