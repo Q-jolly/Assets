@@ -22,6 +22,15 @@ struct SecuritySettingsView:
     private var hideInAppSwitcher =
         true
 
+    @AppStorage(
+        AppLockManager
+            .automaticLockDelayMinutesKey
+    )
+    private var automaticLockDelayMinutes =
+        AppLockManager
+            .defaultAutomaticLockDelayMinutes
+
+
     @State
     private var pendingLockToggle =
         false
@@ -71,6 +80,45 @@ struct SecuritySettingsView:
 
                 if appLockEnabled {
 
+                    Picker(
+                        "自动锁定",
+                        selection:
+                            $automaticLockDelayMinutes
+                    ) {
+
+                        Text(
+                            "1 分钟"
+                        )
+                        .tag(1)
+
+                        Text(
+                            "2 分钟"
+                        )
+                        .tag(2)
+
+                        Text(
+                            "5 分钟"
+                        )
+                        .tag(5)
+
+                        Text(
+                            "10 分钟"
+                        )
+                        .tag(10)
+
+                        Text(
+                            "30 分钟"
+                        )
+                        .tag(30)
+
+                        Text(
+                            "永不"
+                        )
+                        .tag(0)
+                    }
+
+
+
                     Button {
 
                         appLock
@@ -95,7 +143,7 @@ struct SecuritySettingsView:
             } footer: {
 
                 Text(
-                    "开启后，QL Assets 离开后台超过 5 分钟才会重新锁定；5 分钟内切回可直接继续使用。冷启动和“立即锁定”仍会要求身份验证。"
+                    "自动锁定时间可选择 1、2、5、10、30 分钟或永不。“永不”仅关闭后台超时自动锁定；冷启动和“立即锁定”仍会验证身份。"
                 )
             }
 
@@ -124,17 +172,40 @@ struct SecuritySettingsView:
 
             Section {
 
+                NavigationLink {
+
+                    BackupRestoreView()
+
+                } label: {
+
+                    Label(
+                        "备份与恢复",
+                        systemImage:
+                            "externaldrive.fill"
+                    )
+                }
+
+            } header: {
+
+                Text(
+                    "数据"
+                )
+
+            } footer: {
+
+                Text(
+                    "可将账户、账单、银行卡、预算和自定义卡面导出为一个本地备份文件。"
+                )
+            }
+
+
+            Section {
+
                 LabeledContent(
                     "验证方式",
                     value:
                         appLock
                             .authenticationTitle
-                )
-
-                LabeledContent(
-                    "自动锁定",
-                    value:
-                        "离开 5 分钟后"
                 )
 
                 LabeledContent(
@@ -171,6 +242,21 @@ struct SecuritySettingsView:
                 errorMessage
             )
         }
+    }
+
+
+    private var automaticLockText:
+        String {
+
+        if automaticLockDelayMinutes ==
+            0 {
+
+            return
+                "永不"
+        }
+
+        return
+            "\(automaticLockDelayMinutes) 分钟"
     }
 
 

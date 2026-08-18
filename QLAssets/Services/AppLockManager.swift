@@ -13,9 +13,12 @@ final class AppLockManager:
         "security.hideInAppSwitcher"
 
 
-    static let automaticLockDelay:
-        TimeInterval =
-            5 * 60
+    static let automaticLockDelayMinutesKey =
+        "security.automaticLockDelayMinutes"
+
+
+    static let defaultAutomaticLockDelayMinutes =
+        5
 
 
     private var backgroundEnteredAt:
@@ -106,6 +109,69 @@ final class AppLockManager:
                             .hideInSwitcherKey
                 )
         }
+    }
+
+
+    var automaticLockDelayMinutes:
+        Int {
+
+        get {
+
+            let stored =
+                UserDefaults.standard
+                    .integer(
+                        forKey:
+                            Self
+                                .automaticLockDelayMinutesKey
+                    )
+
+
+            // 0 代表“永不自动锁定”。
+            // 首次安装没有值时默认 5 分钟。
+            if UserDefaults.standard
+                .object(
+                    forKey:
+                        Self
+                            .automaticLockDelayMinutesKey
+                ) ==
+                nil {
+
+                return
+                    Self
+                        .defaultAutomaticLockDelayMinutes
+            }
+
+            return stored
+        }
+
+        set {
+
+            UserDefaults.standard
+                .set(
+                    newValue,
+                    forKey:
+                        Self
+                            .automaticLockDelayMinutesKey
+                )
+        }
+    }
+
+
+    var automaticLockDelay:
+        TimeInterval? {
+
+        guard automaticLockDelayMinutes >
+                0
+        else {
+
+            return nil
+        }
+
+        return
+            TimeInterval(
+                automaticLockDelayMinutes *
+                60
+            )
     }
 
 
@@ -246,6 +312,16 @@ final class AppLockManager:
             nil
 
 
+        guard
+            let automaticLockDelay
+        else {
+
+            // “永不”只影响自动锁定；
+            // 冷启动和手动“立即锁定”仍然有效。
+            return false
+        }
+
+
         let elapsed =
             max(
                 0,
@@ -256,11 +332,9 @@ final class AppLockManager:
 
 
         guard elapsed >=
-                Self
-                    .automaticLockDelay
+                automaticLockDelay
         else {
 
-            // 5 分钟宽限期内直接回到 App。
             return false
         }
 
