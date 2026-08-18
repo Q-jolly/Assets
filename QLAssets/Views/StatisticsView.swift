@@ -2945,19 +2945,17 @@ private struct CategoryDonutBreakdownView: View {
                         )
                         .padding(
                             .horizontal,
-                            7
+                            6
                         )
                         .padding(
                             .vertical,
-                            4
+                            3
                         )
                         .frame(
                             width:
                                 layout.labelFrameWidth,
                             alignment:
-                                layout.isRightSide
-                                ? .leading
-                                : .trailing
+                                .center
                         )
                         .background(
                             Color(
@@ -2990,7 +2988,7 @@ private struct CategoryDonutBreakdownView: View {
                                 layout.textAnchorX,
                             y:
                                 layout.end.y -
-                                18
+                                16
                         )
                         .allowsHitTesting(
                             false
@@ -3239,93 +3237,46 @@ private struct CategoryDonutBreakdownView: View {
 
 
         let sidePadding:
-            CGFloat = 8
+            CGFloat = 10
 
         let labelInsetFromLineEnd:
             CGFloat = 6
 
-        let maxLeftWidth =
-            rawSeeds
-                .filter {
-                    !$0.isRightSide
-                }
-                .map {
-                    $0.labelWidth
-                }
-                .max() ?? 0
+        let horizontalSegmentLength:
+            CGFloat = 46
 
-        let maxRightWidth =
-            rawSeeds
-                .filter {
-                    $0.isRightSide
-                }
-                .map {
-                    $0.labelWidth
-                }
-                .max() ?? 0
-
-        let leftColumnWidth =
-            maxLeftWidth
-
-        let rightColumnWidth =
-            maxRightWidth
-
-        let leftTextAnchorX =
-            sidePadding +
-            leftColumnWidth / 2
-
-        let rightTextAnchorX =
-            bounds.width -
-            sidePadding -
-            rightColumnWidth / 2
-
-        let leftLineEndX =
-            leftTextAnchorX +
-            leftColumnWidth / 2 +
-            labelInsetFromLineEnd
-
-        let rightLineEndX =
-            rightTextAnchorX -
-            rightColumnWidth / 2 -
-            labelInsetFromLineEnd
-
-        let elbowGap:
-            CGFloat = 34
-
-        let leftElbowX =
-            max(
-                leftLineEndX + 18,
-                center.x - outerRadius - elbowGap
-            )
-
-        let rightElbowX =
-            min(
-                rightLineEndX - 18,
-                center.x + outerRadius + elbowGap
-            )
+        let outerElbowGap:
+            CGFloat = 18
 
         let rawLayouts =
             rawSeeds.map { seed in
 
-                let endX =
-                    seed.isRightSide
-                    ? rightLineEndX
-                    : leftLineEndX
+                let labelFrameWidth =
+                    seed.labelWidth
 
                 let textAnchorX =
                     seed.isRightSide
-                    ? rightTextAnchorX
-                    : leftTextAnchorX
+                    ? bounds.width - sidePadding - labelFrameWidth / 2
+                    : sidePadding + labelFrameWidth / 2
 
-                let labelFrameWidth =
+                let endX =
                     seed.isRightSide
-                    ? rightColumnWidth
-                    : leftColumnWidth
+                    ? textAnchorX - labelFrameWidth / 2 - labelInsetFromLineEnd
+                    : textAnchorX + labelFrameWidth / 2 + labelInsetFromLineEnd
 
-                let bendX =
-                    seed.isRightSide
-                    ? rightElbowX
-                    : leftElbowX
+                let bendX: CGFloat
+
+                if seed.isRightSide {
+                    bendX = max(
+                        seed.start.x + outerElbowGap,
+                        endX - horizontalSegmentLength
+                    )
+                } else {
+                    bendX = min(
+                        seed.start.x - outerElbowGap,
+                        endX + horizontalSegmentLength
+                    )
+                }
 
                 return CategoryCalloutLayout(
                     id:
@@ -3432,18 +3383,18 @@ private struct CategoryDonutBreakdownView: View {
                 partial, character in
 
                 if character.isASCII {
-                    return partial + 7.5
+                    return partial + 7
                 } else {
-                    return partial + 13.5
+                    return partial + 12.5
                 }
             }
 
         return min(
             max(
-                baseWidth + 18,
-                76
+                baseWidth + 14,
+                66
             ),
-            144
+            120
         )
     }
 
