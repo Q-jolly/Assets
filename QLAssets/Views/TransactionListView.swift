@@ -3,34 +3,326 @@ import SwiftData
 import Foundation
 
 
-struct TransactionListView: View {
+struct TransactionListView:
+    View {
 
-    @Environment(\.modelContext)
+    private enum DateFilter:
+        String,
+        CaseIterable,
+        Identifiable {
+
+        case all =
+            "全部时间"
+
+        case thisMonth =
+            "本月"
+
+        case lastMonth =
+            "上月"
+
+        case recentThreeMonths =
+            "近3个月"
+
+        case thisYear =
+            "今年"
+
+
+        var id:
+            String {
+
+            rawValue
+        }
+    }
+
+
+    private struct MonthGroup:
+        Identifiable {
+
+        let month:
+            Date
+
+        let transactions:
+            [TransactionRecord]
+
+
+        var id:
+            Date {
+
+            month
+        }
+    }
+
+
+    @Environment(
+        \.modelContext
+    )
     private var modelContext
 
     @Query(
-        sort: \TransactionRecord.date,
-        order: .reverse
+        sort:
+            \TransactionRecord.date,
+        order:
+            .reverse
     )
     private var transactions:
         [TransactionRecord]
 
     @Query(
-        sort: \Account.createdAt
+        sort:
+            \Account.createdAt
     )
     private var accounts:
         [Account]
 
     @Query(
-        sort: \BankCard.createdAt
+        sort:
+            \BankCard.createdAt
     )
     private var cards:
         [BankCard]
 
 
-    var body: some View {
+    @State
+    private var searchText =
+        ""
+
+    @State
+    private var showFilters =
+        false
+
+    @State
+    private var selectedType =
+        "全部类型"
+
+    @State
+    private var selectedCategory =
+        "全部分类"
+
+    @State
+    private var selectedAccountID:
+        UUID?
+
+    @State
+    private var selectedCardID:
+        UUID?
+
+    @State
+    private var dateFilter:
+        DateFilter =
+            .all
+
+
+    private var availableCategories:
+        [String] {
+
+        Array(
+            Set(
+                transactions
+                    .map(
+                        \.category
+                    )
+                    .filter {
+                        !$0.isEmpty
+                    }
+            )
+        )
+        .sorted()
+    }
+
+
+    private var filteredTransactions:
+        [TransactionRecord] {
+
+        transactions.filter {
+            transaction in
+
+            matchesSearch(
+                transaction
+            ) &&
+            matchesType(
+                transaction
+            ) &&
+            matchesCategory(
+                transaction
+            ) &&
+            matchesAccount(
+                transaction
+            ) &&
+            matchesCard(
+                transaction
+            ) &&
+            matchesDate(
+                transaction.date
+            )
+        }
+    }
+
+
+    private var monthGroups:
+        [MonthGroup] {
+
+        let grouped =
+            Dictionary(
+                grouping:
+                    filteredTransactions
+            ) {
+                transaction in
+
+                AppTime.calendar
+                    .dateInterval(
+                        of:
+                            .month,
+                        for:
+                            transaction.date
+                    )?
+                    .start
+                ?? transaction.date
+            }
+
+
+        return grouped
+            .map {
+                month,
+                records in
+
+                MonthGroup(
+                    month:
+                        month,
+                    transactions:
+                        records.sorted {
+                            $0.date >
+                            $1.date
+                        }
+                )
+            }
+            .sorted {
+                $0.month >
+                $1.month
+            }
+    }
+
+
+    private var filteredExpense:
+        Double {
+
+        filteredTransactions
+            .filter {
+                $0.type ==
+                    .expense ||
+                $0.type ==
+                    .creditExpense
+            }
+            .reduce(
+                0
+            ) {
+                $0 +
+                abs(
+                    $1.amount
+                )
+            }
+    }
+
+
+    private var filteredIncome:
+        Double {
+
+        filteredTransactions
+            .filter {
+                $0.type ==
+                    .income
+            }
+            .reduce(
+                0
+            ) {
+                $0 +
+                abs(
+                    $1.amount
+                )
+            }
+    }
+
+
+    private var activeFilterCount:
+        Int {
+
+        var count =
+            0
+
+        if selectedType !=
+            "全部类型" {
+
+            count +=
+                1
+        }
+
+        if selectedCategory !=
+            "全部分类" {
+
+            count +=
+                1
+        }
+
+        if selectedAccountID !=
+            nil {
+
+            count +=
+                1
+        }
+
+        if selectedCardID !=
+            nil {
+
+            count +=
+                1
+        }
+
+        if dateFilter !=
+            .all {
+
+            count +=
+                1
+        }
+
+        return count
+    }
+
+
+    var body:
+        some View {
 
         List {
+
+            if !transactions.isEmpty {
+
+                Section {
+
+                    HStack(
+                        spacing: 12
+                    ) {
+
+                        summaryValue(
+                            title:
+                                "筛选支出",
+                            value:
+                                filteredExpense
+                        )
+
+                        summaryValue(
+                            title:
+                                "筛选收入",
+                            value:
+                                filteredIncome
+                        )
+                    }
+
+                } footer: {
+
+                    Text(
+                        "当前共 \(filteredTransactions.count) 笔账单"
+                    )
+                }
+            }
+
 
             if transactions.isEmpty {
 
@@ -44,71 +336,767 @@ struct TransactionListView: View {
                         )
                 )
 
+            } else if filteredTransactions
+                .isEmpty {
+
+                ContentUnavailableView(
+                    "没有匹配的账单",
+                    systemImage:
+                        "magnifyingglass",
+                    description:
+                        Text(
+                            "尝试修改搜索词或筛选条件"
+                        )
+                )
+
             } else {
 
                 ForEach(
-                    transactions
-                ) { transaction in
+                    monthGroups
+                ) { group in
 
-                    NavigationLink {
+                    Section {
 
-                        TransactionDetailView(
-                            transaction:
-                                transaction
-                        )
+                        ForEach(
+                            group
+                                .transactions
+                        ) { transaction in
 
-                    } label: {
+                            NavigationLink {
 
-                        TransactionRowView(
-                            transaction:
-                                transaction,
-                            accountName:
-                                accountName(
-                                    transaction.accountID
-                                ),
-                            targetAccountName:
-                                transaction
-                                    .targetAccountID
-                                    .flatMap {
-                                        accountName($0)
-                                    },
-                            cardName:
-                                transaction
-                                    .bankCardID
-                                    .flatMap {
-                                        cardName($0)
-                                    }
-                        )
+                                TransactionDetailView(
+                                    transaction:
+                                        transaction
+                                )
+
+                            } label: {
+
+                                TransactionRowView(
+                                    transaction:
+                                        transaction,
+                                    accountName:
+                                        accountName(
+                                            transaction
+                                                .accountID
+                                        ),
+                                    targetAccountName:
+                                        transaction
+                                            .targetAccountID
+                                            .flatMap {
+                                                accountName(
+                                                    $0
+                                                )
+                                            },
+                                    cardName:
+                                        transaction
+                                            .bankCardID
+                                            .flatMap {
+                                                cardName(
+                                                    $0
+                                                )
+                                            }
+                                )
+                            }
+                            .swipeActions(
+                                edge:
+                                    .trailing
+                            ) {
+
+                                Button(
+                                    role:
+                                        .destructive
+                                ) {
+
+                                    deleteTransaction(
+                                        transaction
+                                    )
+
+                                } label: {
+
+                                    Label(
+                                        "删除",
+                                        systemImage:
+                                            "trash"
+                                    )
+                                }
+                            }
+                        }
+
+                    } header: {
+
+                        HStack {
+
+                            Text(
+                                monthText(
+                                    group.month
+                                )
+                            )
+
+                            Spacer()
+
+                            Text(
+                                "\(group.transactions.count) 笔"
+                            )
+                            .foregroundStyle(
+                                .secondary
+                            )
+                        }
                     }
                 }
-                .onDelete(
-                    perform:
-                        deleteTransactions
-                )
             }
         }
         .navigationTitle(
             "账单"
         )
+        .searchable(
+            text:
+                $searchText,
+            placement:
+                .navigationBarDrawer(
+                    displayMode:
+                        .automatic
+                ),
+            prompt:
+                "搜索分类、备注、账户或银行卡"
+        )
+        .toolbar {
+
+            ToolbarItemGroup(
+                placement:
+                    .topBarTrailing
+            ) {
+
+                NavigationLink {
+
+                    CategoryManagerView()
+
+                } label: {
+
+                    Image(
+                        systemName:
+                            "square.grid.2x2"
+                    )
+                }
+
+
+                Button {
+
+                    showFilters =
+                        true
+
+                } label: {
+
+                    ZStack(
+                        alignment:
+                            .topTrailing
+                    ) {
+
+                        Image(
+                            systemName:
+                                "line.3.horizontal.decrease.circle"
+                        )
+
+
+                        if activeFilterCount >
+                            0 {
+
+                            Text(
+                                "\(activeFilterCount)"
+                            )
+                            .font(
+                                .system(
+                                    size:
+                                        9,
+                                    weight:
+                                        .bold
+                                )
+                            )
+                            .foregroundStyle(
+                                .white
+                            )
+                            .frame(
+                                width:
+                                    15,
+                                height:
+                                    15
+                            )
+                            .background(
+                                Color
+                                    .red
+                            )
+                            .clipShape(
+                                Circle()
+                            )
+                            .offset(
+                                x:
+                                    7,
+                                y:
+                                    -7
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        .sheet(
+            isPresented:
+                $showFilters
+        ) {
+
+            NavigationStack {
+
+                Form {
+
+                    Section(
+                        "类型"
+                    ) {
+
+                        Picker(
+                            "账单类型",
+                            selection:
+                                $selectedType
+                        ) {
+
+                            Text(
+                                "全部类型"
+                            )
+                            .tag(
+                                "全部类型"
+                            )
+
+
+                            ForEach(
+                                TransactionType
+                                    .userSelectableCases
+                            ) { type in
+
+                                Text(
+                                    type.rawValue
+                                )
+                                .tag(
+                                    type.rawValue
+                                )
+                            }
+
+
+                            Text(
+                                TransactionType
+                                    .adjustment
+                                    .rawValue
+                            )
+                            .tag(
+                                TransactionType
+                                    .adjustment
+                                    .rawValue
+                            )
+                        }
+                    }
+
+
+                    Section(
+                        "分类"
+                    ) {
+
+                        Picker(
+                            "分类",
+                            selection:
+                                $selectedCategory
+                        ) {
+
+                            Text(
+                                "全部分类"
+                            )
+                            .tag(
+                                "全部分类"
+                            )
+
+
+                            ForEach(
+                                availableCategories,
+                                id:
+                                    \.self
+                            ) { category in
+
+                                Text(
+                                    category
+                                )
+                                .tag(
+                                    category
+                                )
+                            }
+                        }
+                    }
+
+
+                    Section(
+                        "账户 / 信用卡"
+                    ) {
+
+                        Picker(
+                            "资产账户",
+                            selection:
+                                $selectedAccountID
+                        ) {
+
+                            Text(
+                                "全部账户"
+                            )
+                            .tag(
+                                UUID?.none
+                            )
+
+
+                            ForEach(
+                                accounts
+                            ) { account in
+
+                                Text(
+                                    account.name
+                                )
+                                .tag(
+                                    Optional(
+                                        account.id
+                                    )
+                                )
+                            }
+                        }
+
+
+                        Picker(
+                            "信用卡",
+                            selection:
+                                $selectedCardID
+                        ) {
+
+                            Text(
+                                "全部信用卡"
+                            )
+                            .tag(
+                                UUID?.none
+                            )
+
+
+                            ForEach(
+                                cards.filter {
+                                    $0.cardType ==
+                                        .credit
+                                }
+                            ) { card in
+
+                                Text(
+                                    "\(card.bankName) •••• \(card.lastFourDigits)"
+                                )
+                                .tag(
+                                    Optional(
+                                        card.id
+                                    )
+                                )
+                            }
+                        }
+                    }
+
+
+                    Section(
+                        "时间"
+                    ) {
+
+                        Picker(
+                            "范围",
+                            selection:
+                                $dateFilter
+                        ) {
+
+                            ForEach(
+                                DateFilter
+                                    .allCases
+                            ) { item in
+
+                                Text(
+                                    item.rawValue
+                                )
+                                .tag(
+                                    item
+                                )
+                            }
+                        }
+                    }
+
+
+                    Section {
+
+                        Button(
+                            "清除全部筛选"
+                        ) {
+
+                            resetFilters()
+                        }
+                        .disabled(
+                            activeFilterCount ==
+                                0
+                        )
+                    }
+                }
+                .navigationTitle(
+                    "筛选账单"
+                )
+                .navigationBarTitleDisplayMode(
+                    .inline
+                )
+                .toolbar {
+
+                    ToolbarItem(
+                        placement:
+                            .confirmationAction
+                    ) {
+
+                        Button(
+                            "完成"
+                        ) {
+
+                            showFilters =
+                                false
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    private func summaryValue(
+        title:
+            String,
+        value:
+            Double
+    ) -> some View {
+
+        VStack(
+            alignment:
+                .leading,
+            spacing:
+                4
+        ) {
+
+            Text(
+                title
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+
+
+            Text(
+                value,
+                format:
+                    .currency(
+                        code:
+                            "CNY"
+                    )
+            )
+            .font(
+                .headline
+            )
+            .lineLimit(1)
+            .minimumScaleFactor(
+                0.75
+            )
+        }
+        .frame(
+            maxWidth:
+                .infinity,
+            alignment:
+                .leading
+        )
+    }
+
+
+    private func matchesSearch(
+        _ transaction:
+            TransactionRecord
+    ) -> Bool {
+
+        let query =
+            searchText
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+
+
+        guard !query.isEmpty
+        else {
+
+            return true
+        }
+
+
+        var fields =
+            [
+                transaction.category,
+                transaction.note,
+                transaction.type.rawValue,
+                AppTime.listDateTime(
+                    transaction.date
+                )
+            ]
+
+
+        if let account =
+            accountName(
+                transaction.accountID
+            ) {
+
+            fields.append(
+                account
+            )
+        }
+
+
+        if let targetID =
+            transaction.targetAccountID,
+           let target =
+            accountName(
+                targetID
+            ) {
+
+            fields.append(
+                target
+            )
+        }
+
+
+        if let cardID =
+            transaction.bankCardID,
+           let card =
+            cardName(
+                cardID
+            ) {
+
+            fields.append(
+                card
+            )
+        }
+
+
+        return fields.contains {
+            $0.localizedCaseInsensitiveContains(
+                query
+            )
+        }
+    }
+
+
+    private func matchesType(
+        _ transaction:
+            TransactionRecord
+    ) -> Bool {
+
+        selectedType ==
+            "全部类型" ||
+        transaction.type.rawValue ==
+            selectedType
+    }
+
+
+    private func matchesCategory(
+        _ transaction:
+            TransactionRecord
+    ) -> Bool {
+
+        selectedCategory ==
+            "全部分类" ||
+        transaction.category ==
+            selectedCategory
+    }
+
+
+    private func matchesAccount(
+        _ transaction:
+            TransactionRecord
+    ) -> Bool {
+
+        guard
+            let selectedAccountID
+        else {
+
+            return true
+        }
+
+
+        return
+            transaction.accountID ==
+                selectedAccountID ||
+            transaction.targetAccountID ==
+                selectedAccountID
+    }
+
+
+    private func matchesCard(
+        _ transaction:
+            TransactionRecord
+    ) -> Bool {
+
+        guard
+            let selectedCardID
+        else {
+
+            return true
+        }
+
+
+        return
+            transaction.bankCardID ==
+            selectedCardID
+    }
+
+
+    private func matchesDate(
+        _ date:
+            Date
+    ) -> Bool {
+
+        let calendar =
+            AppTime.calendar
+
+        let now =
+            Date()
+
+
+        switch dateFilter {
+
+        case .all:
+
+            return true
+
+
+        case .thisMonth:
+
+            return calendar.isDate(
+                date,
+                equalTo:
+                    now,
+                toGranularity:
+                    .month
+            )
+
+
+        case .lastMonth:
+
+            guard
+                let lastMonth =
+                    calendar.date(
+                        byAdding:
+                            .month,
+                        value:
+                            -1,
+                        to:
+                            now
+                    )
+            else {
+
+                return false
+            }
+
+
+            return calendar.isDate(
+                date,
+                equalTo:
+                    lastMonth,
+                toGranularity:
+                    .month
+            )
+
+
+        case .recentThreeMonths:
+
+            guard
+                let start =
+                    calendar.date(
+                        byAdding:
+                            .month,
+                        value:
+                            -3,
+                        to:
+                            now
+                    )
+            else {
+
+                return true
+            }
+
+
+            return
+                date >=
+                start
+
+
+        case .thisYear:
+
+            return calendar.isDate(
+                date,
+                equalTo:
+                    now,
+                toGranularity:
+                    .year
+            )
+        }
+    }
+
+
+    private func monthText(
+        _ date:
+            Date
+    ) -> String {
+
+        let formatter =
+            DateFormatter()
+
+        formatter.calendar =
+            AppTime.calendar
+
+        formatter.timeZone =
+            AppTime.timeZone
+
+        formatter.locale =
+            Locale(
+                identifier:
+                    "zh_CN"
+            )
+
+        formatter.dateFormat =
+            "yyyy年M月"
+
+        return formatter.string(
+            from:
+                date
+        )
     }
 
 
     private func accountName(
-        _ id: UUID
+        _ id:
+            UUID
     ) -> String? {
 
         accounts.first {
-            $0.id == id
-        }?.name
+            $0.id ==
+                id
+        }?
+        .name
     }
 
 
     private func cardName(
-        _ id: UUID
+        _ id:
+            UUID
     ) -> String? {
 
         cards.first {
-            $0.id == id
+            $0.id ==
+                id
         }
         .map {
             "\($0.bankName) •••• \($0.lastFourDigits)"
@@ -116,17 +1104,14 @@ struct TransactionListView: View {
     }
 
 
-    private func deleteTransactions(
-        offsets: IndexSet
+    private func deleteTransaction(
+        _ transaction:
+            TransactionRecord
     ) {
 
-        for index in offsets {
-
-            let transaction =
-                transactions[index]
-
-            _ =
-                TransactionService.delete(
+        _ =
+            TransactionService
+                .delete(
                     transaction,
                     accounts:
                         accounts,
@@ -135,7 +1120,25 @@ struct TransactionListView: View {
                     context:
                         modelContext
                 )
-        }
+    }
+
+
+    private func resetFilters() {
+
+        selectedType =
+            "全部类型"
+
+        selectedCategory =
+            "全部分类"
+
+        selectedAccountID =
+            nil
+
+        selectedCardID =
+            nil
+
+        dateFilter =
+            .all
     }
 }
 

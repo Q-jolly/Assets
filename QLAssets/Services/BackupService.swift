@@ -16,6 +16,12 @@ struct QLAssetsBackup:
     let monthlyBudget:
         Double
 
+    let expenseCategoriesStored:
+        String?
+
+    let incomeCategoriesStored:
+        String?
+
     let accounts:
         [BackupAccount]
 
@@ -177,7 +183,7 @@ enum BackupRestoreError:
 enum BackupService {
 
     static let currentVersion =
-        1
+        2
 
 
     static func makeBackup(
@@ -200,6 +206,20 @@ enum BackupService {
                         .double(
                             forKey:
                                 "monthlyBudgetCNY"
+                        ),
+                expenseCategoriesStored:
+                    UserDefaults.standard
+                        .string(
+                            forKey:
+                                CategoryStore
+                                    .expenseKey
+                        ),
+                incomeCategoriesStored:
+                    UserDefaults.standard
+                        .string(
+                            forKey:
+                                CategoryStore
+                                    .incomeKey
                         ),
                 accounts:
                     accounts.map {
@@ -621,6 +641,34 @@ enum BackupService {
                 forKey:
                     "monthlyBudgetCNY"
             )
+
+
+        if let expense =
+            backup
+                .expenseCategoriesStored {
+
+            UserDefaults.standard
+                .set(
+                    expense,
+                    forKey:
+                        CategoryStore
+                            .expenseKey
+                )
+        }
+
+
+        if let income =
+            backup
+                .incomeCategoriesStored {
+
+            UserDefaults.standard
+                .set(
+                    income,
+                    forKey:
+                        CategoryStore
+                            .incomeKey
+                )
+        }
     }
 }
 

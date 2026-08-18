@@ -105,29 +105,61 @@ struct AddTransactionView: View {
         Bool
 
 
-    private let expenseCategories = [
-        "餐饮",
-        "交通",
-        "购物",
-        "娱乐",
-        "居住",
-        "医疗",
-        "数码",
-        "衣物",
-        "日用",
-        "其他"
-    ]
+    @AppStorage(
+        CategoryStore
+            .expenseKey
+    )
+    private var expenseCategoriesStored =
+        ""
+
+    @AppStorage(
+        CategoryStore
+            .incomeKey
+    )
+    private var incomeCategoriesStored =
+        ""
 
 
-    private let incomeCategories = [
-        "工资",
-        "奖金",
-        "兼职",
-        "理财",
-        "红包",
-        "报销",
-        "其他"
-    ]
+    private var expenseCategoryItems:
+        [CategoryItem] {
+
+        CategoryStore
+            .expenseCategories(
+                from:
+                    expenseCategoriesStored
+            )
+    }
+
+
+    private var incomeCategoryItems:
+        [CategoryItem] {
+
+        CategoryStore
+            .incomeCategories(
+                from:
+                    incomeCategoriesStored
+            )
+    }
+
+
+    private var expenseCategories:
+        [String] {
+
+        expenseCategoryItems
+            .map(
+                \.name
+            )
+    }
+
+
+    private var incomeCategories:
+        [String] {
+
+        incomeCategoryItems
+            .map(
+                \.name
+            )
+    }
 
 
     private var creditCards:
@@ -250,7 +282,7 @@ struct AddTransactionView: View {
 
             if showsCategory {
 
-                Section("分类") {
+                Section {
 
                     Picker(
                         "分类",
@@ -259,14 +291,39 @@ struct AddTransactionView: View {
                     ) {
 
                         ForEach(
-                            currentCategories,
-                            id: \.self
+                            currentCategoryItems
                         ) { item in
 
-                            Text(item)
-                                .tag(item)
+                            Label(
+                                item.name,
+                                systemImage:
+                                    item.icon
+                            )
+                            .tag(
+                                item.name
+                            )
                         }
                     }
+
+
+                    NavigationLink {
+
+                        CategoryManagerView()
+
+                    } label: {
+
+                        Label(
+                            "管理分类",
+                            systemImage:
+                                "square.grid.2x2"
+                        )
+                    }
+
+                } header: {
+
+                    Text(
+                        "分类"
+                    )
                 }
             }
 
@@ -525,6 +582,20 @@ struct AddTransactionView: View {
                     creditCards.first?.id
             }
         }
+        .onChange(
+            of:
+                expenseCategoriesStored
+        ) { _ in
+
+            ensureValidCategory()
+        }
+        .onChange(
+            of:
+                incomeCategoriesStored
+        ) { _ in
+
+            ensureValidCategory()
+        }
         .alert(
             "记录成功",
             isPresented:
@@ -595,6 +666,31 @@ struct AddTransactionView: View {
 
         default:
             return "账户"
+        }
+    }
+
+
+    private var currentCategoryItems:
+        [CategoryItem] {
+
+        switch transactionType {
+
+        case .expense,
+             .creditExpense:
+
+            return
+                expenseCategoryItems
+
+        case .income:
+
+            return
+                incomeCategoryItems
+
+        case .transfer,
+             .creditRepayment,
+             .adjustment:
+
+            return []
         }
     }
 
@@ -718,6 +814,28 @@ struct AddTransactionView: View {
 
         default:
             return "账户余额已同步更新"
+        }
+    }
+
+
+    private func ensureValidCategory() {
+
+        guard showsCategory
+        else {
+
+            return
+        }
+
+
+        if !currentCategories
+            .contains(
+                category
+            ) {
+
+            category =
+                currentCategories
+                    .first
+                ?? "其他"
         }
     }
 
