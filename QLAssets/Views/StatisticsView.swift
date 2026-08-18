@@ -603,6 +603,126 @@ struct StatisticsView: View {
     }
 
 
+    private var categoryChartSlices:
+        [CategoryChartSlice] {
+
+        let colors:
+            [Color] = [
+                .blue,
+                .green,
+                .orange,
+                .purple,
+                .red,
+                .teal,
+                .yellow,
+                .pink,
+                .indigo,
+                .mint
+            ]
+
+        guard monthlyExpense > 0
+        else {
+            return []
+        }
+
+        var startAngle =
+            -90.0
+
+        return categoryExpensePoints
+            .enumerated()
+            .map { index, point in
+
+                let percentage =
+                    point.amount /
+                    monthlyExpense
+
+                let endAngle =
+                    startAngle +
+                    percentage *
+                    360
+
+                defer {
+                    startAngle =
+                        endAngle
+                }
+
+                return CategoryChartSlice(
+                    category:
+                        point.category,
+                    amount:
+                        point.amount,
+                    percentage:
+                        percentage,
+                    startAngle:
+                        .degrees(
+                            startAngle
+                        ),
+                    endAngle:
+                        .degrees(
+                            endAngle
+                        ),
+                    color:
+                        colors[
+                            index %
+                            colors.count
+                        ]
+                )
+            }
+    }
+
+
+    private var categoryLegend:
+        some View {
+
+        LazyVGrid(
+            columns:
+                [
+                    GridItem(
+                        .adaptive(
+                            minimum: 72
+                        ),
+                        spacing: 10,
+                        alignment: .leading
+                    )
+                ],
+            alignment:
+                .leading,
+            spacing:
+                10
+        ) {
+
+            ForEach(
+                categoryChartSlices
+            ) { point in
+
+                HStack(
+                    spacing: 6
+                ) {
+
+                    Circle()
+                        .fill(
+                            point.color
+                        )
+                        .frame(
+                            width: 10,
+                            height: 10
+                        )
+
+                    Text(
+                        point.category
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+            }
+        }
+    }
+
+
     // MARK: - 趋势
 
     private var sixMonthFlowPoints:
@@ -1545,40 +1665,16 @@ struct StatisticsView: View {
 
             } else {
 
-                Chart(
-                    categoryExpensePoints
-                ) { point in
-
-                    SectorMark(
-                        angle:
-                            .value(
-                                "金额",
-                                point.amount
-                            ),
-                        innerRadius:
-                            .ratio(0.60),
-                        angularInset:
-                            2
-                    )
-                    .foregroundStyle(
-                        by:
-                            .value(
-                                "分类",
-                                point.category
-                            )
-                    )
-                }
+                CategoryDonutBreakdownView(
+                    points:
+                        categoryChartSlices
+                )
                 .frame(
-                    height: 220
+                    height: 300
                 )
-                .chartLegend(
-                    position:
-                        .bottom,
-                    alignment:
-                        .leading,
-                    spacing:
-                        8
-                )
+
+
+                categoryLegend
 
 
                 VStack(
@@ -1586,8 +1682,12 @@ struct StatisticsView: View {
                 ) {
 
                     ForEach(
-                        categoryExpensePoints
-                    ) { point in
+                        Array(
+                            categoryChartSlices.enumerated()
+                        ),
+                        id:
+                            \.element.id
+                    ) { _, point in
 
                         NavigationLink {
 
@@ -2335,6 +2435,656 @@ private struct MonthlyFlowPoint:
         String {
 
         "\(month.timeIntervalSince1970)-\(type)"
+    }
+}
+
+
+private struct CategoryChartSlice:
+    Identifiable {
+
+    let category:
+        String
+
+    let amount:
+        Double
+
+    let percentage:
+        Double
+
+    let startAngle:
+        Angle
+
+    let endAngle:
+        Angle
+
+    let color:
+        Color
+
+    var id:
+        String {
+
+        category
+    }
+
+    var midAngle:
+        Angle {
+
+        .degrees(
+            (
+                startAngle.degrees +
+                endAngle.degrees
+            ) /
+            2
+        )
+    }
+
+    var percentageText:
+        String {
+
+        percentage.formatted(
+            .percent
+                .precision(
+                    .fractionLength(
+                        1
+                    )
+                )
+        )
+    }
+
+    var accessibilityText:
+        String {
+
+        "\(category) \(percentageText)"
+    }
+}
+
+
+private struct CategoryDonutBreakdownView: View {
+
+    let points:
+        [CategoryChartSlice]
+
+    var body: some View {
+
+        GeometryReader { proxy in
+
+            let width =
+                proxy.size.width
+
+            let height =
+                proxy.size.height
+
+            let chartSize =
+                min(
+                    width,
+                    height
+                )
+
+            let center =
+                CGPoint(
+                    x:
+                        width /
+                        2,
+                    y:
+                        height /
+                        2
+                )
+
+            let outerRadius =
+                chartSize *
+                0.31
+
+            let innerRadius =
+                outerRadius *
+                0.56
+
+            let calloutRadius =
+                outerRadius +
+                18
+
+            let horizontalExtension:
+                CGFloat = 34
+
+            let labelLayouts =
+                resolvedLabelLayouts(
+                    center:
+                        center,
+                    outerRadius:
+                        outerRadius,
+                    calloutRadius:
+                        calloutRadius,
+                    horizontalExtension:
+                        horizontalExtension
+                )
+
+            ZStack {
+
+                ForEach(
+                    points
+                ) { point in
+
+                    DonutSliceShape(
+                        startAngle:
+                            point.startAngle,
+                        endAngle:
+                            point.endAngle,
+                        innerRadiusRatio:
+                            innerRadius /
+                            outerRadius
+                    )
+                    .fill(
+                        point.color
+                    )
+                }
+
+
+                Circle()
+                    .fill(
+                        Color(
+                            .systemBackground
+                        )
+                    )
+                    .frame(
+                        width:
+                            innerRadius *
+                            2,
+                        height:
+                            innerRadius *
+                            2
+                    )
+
+
+                VStack(
+                    spacing: 4
+                ) {
+
+                    Text(
+                        "支出占比"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                    Text(
+                        points
+                            .reduce(0) {
+                                $0 + $1.amount
+                            },
+                        format:
+                            .currency(
+                                code:
+                                    "CNY"
+                            )
+                    )
+                    .font(
+                        .headline
+                    )
+                }
+
+
+                ForEach(
+                    points
+                ) { point in
+
+                    if let layout =
+                        labelLayouts[
+                            point.id
+                        ] {
+
+                        Path { path in
+
+                            path.move(
+                                to:
+                                    layout.start
+                            )
+
+                            path.addLine(
+                                to:
+                                    layout.bend
+                            )
+
+                            path.addLine(
+                                to:
+                                    layout.end
+                            )
+                        }
+                        .stroke(
+                            point.color.opacity(
+                                0.78
+                            ),
+                            style:
+                                StrokeStyle(
+                                    lineWidth: 1.5,
+                                    lineCap: .round,
+                                    lineJoin: .round
+                                )
+                        )
+
+
+                        Circle()
+                            .fill(
+                                point.color
+                            )
+                            .frame(
+                                width: 6,
+                                height: 6
+                            )
+                            .position(
+                                layout.start
+                            )
+
+
+                        Text(
+                            point.percentageText
+                        )
+                        .font(
+                            .caption2
+                                .weight(
+                                    .semibold
+                                )
+                        )
+                        .foregroundStyle(
+                            .primary
+                        )
+                        .padding(
+                            .horizontal,
+                            8
+                        )
+                        .padding(
+                            .vertical,
+                            4
+                        )
+                        .background(
+                            Color(
+                                .systemBackground
+                            )
+                            .opacity(
+                                0.95
+                            )
+                        )
+                        .clipShape(
+                            Capsule()
+                        )
+                        .shadow(
+                            color:
+                                .black.opacity(
+                                    0.04
+                                ),
+                            radius:
+                                1,
+                            x: 0,
+                            y: 1
+                        )
+                        .position(
+                            x:
+                                layout.textAnchorX,
+                            y:
+                                layout.end.y
+                        )
+                        .accessibilityLabel(
+                            point.accessibilityText
+                        )
+                    }
+                }
+            }
+            .frame(
+                maxWidth:
+                    .infinity,
+                maxHeight:
+                    .infinity
+            )
+        }
+    }
+
+    private func resolvedLabelLayouts(
+        center:
+            CGPoint,
+        outerRadius:
+            CGFloat,
+        calloutRadius:
+            CGFloat,
+        horizontalExtension:
+            CGFloat
+    ) -> [String: CategoryCalloutLayout] {
+
+        let rawLayouts =
+            points.map { point in
+
+                let radians =
+                    point.midAngle
+                        .radians
+
+                let isRightSide =
+                    cos(
+                        radians
+                    ) >= 0
+
+                let start =
+                    CGPoint(
+                        x:
+                            center.x +
+                            cos(
+                                radians
+                            ) *
+                            (outerRadius + 2),
+                        y:
+                            center.y +
+                            sin(
+                                radians
+                            ) *
+                            (outerRadius + 2)
+                    )
+
+                let bendX =
+                    center.x +
+                    (isRightSide
+                     ? calloutRadius
+                     : -calloutRadius)
+
+                let proposedY =
+                    center.y +
+                    sin(
+                        radians
+                    ) *
+                    calloutRadius
+
+                let endX =
+                    bendX +
+                    (isRightSide
+                     ? horizontalExtension
+                     : -horizontalExtension)
+
+                return CategoryCalloutLayout(
+                    id:
+                        point.id,
+                    start:
+                        start,
+                    bend:
+                        CGPoint(
+                            x:
+                                bendX,
+                            y:
+                                proposedY
+                        ),
+                    end:
+                        CGPoint(
+                            x:
+                                endX,
+                            y:
+                                proposedY
+                        ),
+                    textAnchorX:
+                        endX +
+                        (isRightSide
+                         ? 26
+                         : -26),
+                    isRightSide:
+                        isRightSide
+                )
+            }
+
+        let topLimit =
+            center.y -
+            outerRadius -
+            14
+
+        let bottomLimit =
+            center.y +
+            outerRadius +
+            14
+
+        let minimumGap:
+            CGFloat = 18
+
+        let leftAdjusted =
+            adjustSideLayouts(
+                rawLayouts
+                    .filter {
+                        !$0.isRightSide
+                    },
+                topLimit:
+                    topLimit,
+                bottomLimit:
+                    bottomLimit,
+                minimumGap:
+                    minimumGap
+            )
+
+        let rightAdjusted =
+            adjustSideLayouts(
+                rawLayouts
+                    .filter {
+                        $0.isRightSide
+                    },
+                topLimit:
+                    topLimit,
+                bottomLimit:
+                    bottomLimit,
+                minimumGap:
+                    minimumGap
+            )
+
+        return Dictionary(
+            uniqueKeysWithValues:
+                (
+                    leftAdjusted +
+                    rightAdjusted
+                )
+                .map {
+                    (
+                        $0.id,
+                        $0
+                    )
+                }
+        )
+    }
+
+    private func adjustSideLayouts(
+        _ layouts:
+            [CategoryCalloutLayout],
+        topLimit:
+            CGFloat,
+        bottomLimit:
+            CGFloat,
+        minimumGap:
+            CGFloat
+    ) -> [CategoryCalloutLayout] {
+
+        guard !layouts.isEmpty
+        else {
+            return []
+        }
+
+        var adjusted =
+            layouts.sorted {
+                $0.end.y <
+                $1.end.y
+            }
+
+        var previousY =
+            topLimit -
+            minimumGap
+
+        for index in
+            adjusted.indices {
+
+            var layout =
+                adjusted[index]
+
+            let newY =
+                max(
+                    layout.end.y,
+                    previousY +
+                    minimumGap
+                )
+
+            layout.bend.y =
+                newY
+
+            layout.end.y =
+                newY
+
+            adjusted[index] =
+                layout
+
+            previousY =
+                newY
+        }
+
+        if let last =
+            adjusted.last,
+           last.end.y >
+                bottomLimit {
+
+            let overflow =
+                last.end.y -
+                bottomLimit
+
+            for index in
+                adjusted.indices
+                    .reversed() {
+
+                var layout =
+                    adjusted[index]
+
+                let shiftedY =
+                    layout.end.y -
+                    overflow
+
+                if index <
+                    adjusted.count -
+                    1 {
+
+                    let nextY =
+                        adjusted[
+                            index + 1
+                        ]
+                        .end.y -
+                        minimumGap
+
+                    layout.end.y =
+                        min(
+                            shiftedY,
+                            nextY
+                        )
+
+                } else {
+
+                    layout.end.y =
+                        shiftedY
+                }
+
+                layout.end.y =
+                    max(
+                        layout.end.y,
+                        topLimit
+                    )
+
+                layout.bend.y =
+                    layout.end.y
+
+                adjusted[index] =
+                    layout
+            }
+        }
+
+        return adjusted
+    }
+}
+
+
+private struct CategoryCalloutLayout {
+
+    let id:
+        String
+
+    let start:
+        CGPoint
+
+    var bend:
+        CGPoint
+
+    var end:
+        CGPoint
+
+    let textAnchorX:
+        CGFloat
+
+    let isRightSide:
+        Bool
+}
+
+
+private struct DonutSliceShape:
+    Shape {
+
+    let startAngle:
+        Angle
+
+    let endAngle:
+        Angle
+
+    let innerRadiusRatio:
+        CGFloat
+
+    func path(
+        in rect:
+            CGRect
+    ) -> Path {
+
+        let center =
+            CGPoint(
+                x:
+                    rect.midX,
+                y:
+                    rect.midY
+            )
+
+        let outerRadius =
+            min(
+                rect.width,
+                rect.height
+            ) / 2
+
+        let innerRadius =
+            outerRadius *
+            innerRadiusRatio
+
+        var path =
+            Path()
+
+        path.addArc(
+            center:
+                center,
+            radius:
+                outerRadius,
+            startAngle:
+                startAngle,
+            endAngle:
+                endAngle,
+            clockwise:
+                false
+        )
+
+        path.addArc(
+            center:
+                center,
+            radius:
+                innerRadius,
+            startAngle:
+                endAngle,
+            endAngle:
+                startAngle,
+            clockwise:
+                true
+        )
+
+        path.closeSubpath()
+
+        return path
     }
 }
 
