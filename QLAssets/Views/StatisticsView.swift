@@ -3289,6 +3289,21 @@ private struct CategoryDonutBreakdownView: View {
             rightColumnWidth / 2 -
             labelInsetFromLineEnd
 
+        let elbowGap:
+            CGFloat = 34
+
+        let leftElbowX =
+            max(
+                leftLineEndX + 18,
+                center.x - outerRadius - elbowGap
+            )
+
+        let rightElbowX =
+            min(
+                rightLineEndX - 18,
+                center.x + outerRadius + elbowGap
+            )
+
         let rawLayouts =
             rawSeeds.map { seed in
 
@@ -3307,60 +3322,10 @@ private struct CategoryDonutBreakdownView: View {
                     ? rightColumnWidth
                     : leftColumnWidth
 
-                let bendX: CGFloat
-
-                if seed.isRightSide {
-
-                    let available =
-                        max(
-                            endX -
-                            seed.start.x,
-                            26
-                        )
-
-                    let diagonalLength =
-                        min(
-                            32,
-                            max(
-                                18,
-                                available *
-                                0.35
-                            )
-                        )
-
-                    bendX =
-                        min(
-                            seed.start.x +
-                            diagonalLength,
-                            endX - 10
-                        )
-
-                } else {
-
-                    let available =
-                        max(
-                            seed.start.x -
-                            endX,
-                            26
-                        )
-
-                    let diagonalLength =
-                        min(
-                            32,
-                            max(
-                                18,
-                                available *
-                                0.35
-                            )
-                        )
-
-                    bendX =
-                        max(
-                            seed.start.x -
-                            diagonalLength,
-                            endX + 10
-                        )
-                }
+                let bendX =
+                    seed.isRightSide
+                    ? rightElbowX
+                    : leftElbowX
 
                 return CategoryCalloutLayout(
                     id:
