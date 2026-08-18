@@ -3239,7 +3239,7 @@ private struct CategoryDonutBreakdownView: View {
 
 
         let sidePadding:
-            CGFloat = 18
+            CGFloat = 8
 
         let labelInsetFromLineEnd:
             CGFloat = 6
@@ -3315,16 +3315,16 @@ private struct CategoryDonutBreakdownView: View {
                         max(
                             endX -
                             seed.start.x,
-                            18
+                            26
                         )
 
                     let diagonalLength =
                         min(
-                            24,
+                            32,
                             max(
-                                10,
+                                18,
                                 available *
-                                0.42
+                                0.35
                             )
                         )
 
@@ -3332,7 +3332,7 @@ private struct CategoryDonutBreakdownView: View {
                         min(
                             seed.start.x +
                             diagonalLength,
-                            endX - 8
+                            endX - 10
                         )
 
                 } else {
@@ -3341,16 +3341,16 @@ private struct CategoryDonutBreakdownView: View {
                         max(
                             seed.start.x -
                             endX,
-                            18
+                            26
                         )
 
                     let diagonalLength =
                         min(
-                            24,
+                            32,
                             max(
-                                10,
+                                18,
                                 available *
-                                0.42
+                                0.35
                             )
                         )
 
@@ -3358,7 +3358,7 @@ private struct CategoryDonutBreakdownView: View {
                         max(
                             seed.start.x -
                             diagonalLength,
-                            endX + 8
+                            endX + 10
                         )
                 }
 
