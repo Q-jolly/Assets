@@ -2655,7 +2655,6 @@ private struct CategoryDonutBreakdownView: View {
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
             // 给左右折线和文字留下空间。
-            // 引导线采用“一次折线”样式，视觉上更自然。
             let outerRadius =
                 min(
                     width *
@@ -2673,7 +2672,7 @@ private struct CategoryDonutBreakdownView: View {
                 14
 
             let horizontalExtension:
-                CGFloat = 18
+                CGFloat = 20
 
             let labelLayouts =
                 resolvedLabelLayouts(
@@ -3187,8 +3186,8 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? (outerRadius + 22)
-                        : -(outerRadius + 22)
+                        ? (outerRadius + 20)
+                        : -(outerRadius + 20)
                     )
 
                 let proposedY =
@@ -3202,18 +3201,18 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? (outerRadius + 52)
-                        : -(outerRadius + 52)
+                        ? (outerRadius + 52 + horizontalExtension)
+                        : -(outerRadius + 52 + horizontalExtension)
                     )
 
-                // 标签中心距离末端约 39pt，
+                // 标签中心距离末端约 42pt，
                 // 同时限制在当前视图边界内。
                 let rawTextX =
                     endX +
                     (
                         isRightSide
-                        ? 39
-                        : -39
+                        ? 42
+                        : -42
                     )
 
                 let textAnchorX =
@@ -3237,7 +3236,7 @@ private struct CategoryDonutBreakdownView: View {
                             x:
                                 bendX,
                             y:
-                                start.y
+                                proposedY
                         ),
                     end:
                         CGPoint(
@@ -3256,23 +3255,23 @@ private struct CategoryDonutBreakdownView: View {
 
         let topLimit =
             max(
-                18,
+                22,
                 center.y -
                 outerRadius -
-                30
+                34
             )
 
         let bottomLimit =
             min(
                 bounds.height -
-                18,
+                22,
                 center.y +
                 outerRadius +
-                30
+                34
             )
 
         let minimumGap:
-            CGFloat = 25
+            CGFloat = 30
 
 
         let leftAdjusted =
@@ -3305,12 +3304,19 @@ private struct CategoryDonutBreakdownView: View {
             )
 
 
+        let normalizedLayouts =
+            (
+                leftAdjusted +
+                rightAdjusted
+            ).map {
+                normalizeCalloutLayout(
+                    $0
+                )
+            }
+
         return Dictionary(
             uniqueKeysWithValues:
-                (
-                    leftAdjusted +
-                    rightAdjusted
-                )
+                normalizedLayouts
                 .map {
                     (
                         $0.id,
@@ -3318,6 +3324,27 @@ private struct CategoryDonutBreakdownView: View {
                     )
                 }
         )
+    }
+
+
+    private func normalizeCalloutLayout(
+        _ layout:
+            CategoryCalloutLayout
+    ) -> CategoryCalloutLayout {
+
+        var adjusted =
+            layout
+
+        let deltaY =
+            adjusted.end.y -
+            adjusted.start.y
+
+        adjusted.bend.y =
+            adjusted.start.y +
+            deltaY *
+            0.42
+
+        return adjusted
     }
 
 
