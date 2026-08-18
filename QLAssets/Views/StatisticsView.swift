@@ -34,6 +34,10 @@ struct StatisticsView: View {
     private var selectedDay:
         Date?
 
+    @State
+    private var selectedCategoryID:
+        String?
+
 
     // MARK: - 月份
 
@@ -201,6 +205,9 @@ struct StatisticsView: View {
         }
 
         selectedDay =
+            nil
+
+        selectedCategoryID =
             nil
     }
 
@@ -671,6 +678,38 @@ struct StatisticsView: View {
     }
 
 
+    private var selectedCategorySlice:
+        CategoryChartSlice? {
+
+        guard
+            let selectedCategoryID
+        else {
+
+            return nil
+        }
+
+        return categoryChartSlices
+            .first {
+                $0.id ==
+                selectedCategoryID
+            }
+    }
+
+
+    private var displayedCategorySlices:
+        [CategoryChartSlice] {
+
+        if let selectedCategorySlice {
+
+            return [
+                selectedCategorySlice
+            ]
+        }
+
+        return categoryChartSlices
+    }
+
+
     private var categoryLegend:
         some View {
 
@@ -679,45 +718,112 @@ struct StatisticsView: View {
                 [
                     GridItem(
                         .adaptive(
-                            minimum: 72
+                            minimum: 86
                         ),
-                        spacing: 10,
-                        alignment: .leading
+                        spacing: 8,
+                        alignment:
+                            .leading
                     )
                 ],
             alignment:
                 .leading,
             spacing:
-                10
+                8
         ) {
 
             ForEach(
                 categoryChartSlices
             ) { point in
 
-                HStack(
-                    spacing: 6
-                ) {
+                Button {
 
-                    Circle()
-                        .fill(
-                            point.color
-                        )
-                        .frame(
-                            width: 10,
-                            height: 10
-                        )
+                    toggleCategorySelection(
+                        point.id
+                    )
 
-                    Text(
-                        point.category
+                } label: {
+
+                    HStack(
+                        spacing: 6
+                    ) {
+
+                        Circle()
+                            .fill(
+                                point.color
+                            )
+                            .frame(
+                                width: 10,
+                                height: 10
+                            )
+
+                        Text(
+                            point.category
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            selectedCategoryID ==
+                                nil ||
+                            selectedCategoryID ==
+                                point.id
+                            ? .primary
+                            : .secondary
+                        )
+                    }
+                    .padding(
+                        .horizontal,
+                        8
                     )
-                    .font(
-                        .caption
+                    .padding(
+                        .vertical,
+                        5
                     )
-                    .foregroundStyle(
-                        .secondary
-                    )
+                    .background {
+
+                        if selectedCategoryID ==
+                            point.id {
+
+                            Capsule()
+                                .fill(
+                                    point.color
+                                        .opacity(
+                                            0.12
+                                        )
+                                )
+                        }
+                    }
                 }
+                .buttonStyle(
+                    .plain
+                )
+            }
+        }
+    }
+
+
+    private func toggleCategorySelection(
+        _ categoryID:
+            String
+    ) {
+
+        withAnimation(
+            .snappy(
+                duration:
+                    0.24
+            )
+        ) {
+
+            if selectedCategoryID ==
+                categoryID {
+
+                selectedCategoryID =
+                    nil
+
+            } else {
+
+                selectedCategoryID =
+                    categoryID
             }
         }
     }
@@ -916,6 +1022,9 @@ struct StatisticsView: View {
                             currentMonthStart
 
                         selectedDay =
+                            nil
+
+                        selectedCategoryID =
                             nil
                     }
                     .font(
@@ -1667,10 +1776,12 @@ struct StatisticsView: View {
 
                 CategoryDonutBreakdownView(
                     points:
-                        categoryChartSlices
+                        categoryChartSlices,
+                    selectedCategoryID:
+                        $selectedCategoryID
                 )
                 .frame(
-                    height: 300
+                    height: 320
                 )
 
 
@@ -1682,12 +1793,8 @@ struct StatisticsView: View {
                 ) {
 
                     ForEach(
-                        Array(
-                            categoryChartSlices.enumerated()
-                        ),
-                        id:
-                            \.element.id
-                    ) { _, point in
+                        displayedCategorySlices
+                    ) { point in
 
                         NavigationLink {
 
@@ -1702,7 +1809,19 @@ struct StatisticsView: View {
 
                         } label: {
 
-                            HStack {
+                            HStack(
+                                spacing: 12
+                            ) {
+
+                                Circle()
+                                    .fill(
+                                        point.color
+                                    )
+                                    .frame(
+                                        width: 11,
+                                        height: 11
+                                    )
+
 
                                 VStack(
                                     alignment:
@@ -1782,6 +1901,11 @@ struct StatisticsView: View {
                     .continuous
             )
         )
+        .onDisappear {
+
+            selectedCategoryID =
+                nil
+        }
     }
 
 
@@ -2504,6 +2628,11 @@ private struct CategoryDonutBreakdownView: View {
     let points:
         [CategoryChartSlice]
 
+    @Binding
+    var selectedCategoryID:
+        String?
+
+
     var body: some View {
 
         GeometryReader { proxy in
@@ -2513,12 +2642,6 @@ private struct CategoryDonutBreakdownView: View {
 
             let height =
                 proxy.size.height
-
-            let chartSize =
-                min(
-                    width,
-                    height
-                )
 
             let center =
                 CGPoint(
@@ -2530,9 +2653,15 @@ private struct CategoryDonutBreakdownView: View {
                         2
                 )
 
+            // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
+            // 给左右折线和文字留下空间。
             let outerRadius =
-                chartSize *
-                0.31
+                min(
+                    width *
+                    0.285,
+                    height *
+                    0.31
+                )
 
             let innerRadius =
                 outerRadius *
@@ -2540,10 +2669,10 @@ private struct CategoryDonutBreakdownView: View {
 
             let calloutRadius =
                 outerRadius +
-                18
+                14
 
             let horizontalExtension:
-                CGFloat = 34
+                CGFloat = 18
 
             let labelLayouts =
                 resolvedLabelLayouts(
@@ -2554,14 +2683,47 @@ private struct CategoryDonutBreakdownView: View {
                     calloutRadius:
                         calloutRadius,
                     horizontalExtension:
-                        horizontalExtension
+                        horizontalExtension,
+                    bounds:
+                        proxy.size
                 )
 
+
             ZStack {
+
+                // 点击圆环之外的空白区域，视为失去焦点。
+                Color.clear
+                    .contentShape(
+                        Rectangle()
+                    )
+                    .onTapGesture {
+
+                        clearSelection()
+                    }
+
 
                 ForEach(
                     points
                 ) { point in
+
+                    let isSelected =
+                        selectedCategoryID ==
+                        point.id
+
+                    let hasSelection =
+                        selectedCategoryID !=
+                        nil
+
+                    let radians =
+                        point.midAngle
+                            .radians
+
+                    let selectionOffset:
+                        CGFloat =
+                            isSelected
+                            ? 9
+                            : 0
+
 
                     DonutSliceShape(
                         startAngle:
@@ -2574,6 +2736,80 @@ private struct CategoryDonutBreakdownView: View {
                     )
                     .fill(
                         point.color
+                    )
+                    .frame(
+                        width:
+                            outerRadius *
+                            2,
+                        height:
+                            outerRadius *
+                            2
+                    )
+                    .opacity(
+                        hasSelection &&
+                        !isSelected
+                        ? 0.28
+                        : 1
+                    )
+                    .scaleEffect(
+                        isSelected
+                        ? 1.035
+                        : 1
+                    )
+                    .offset(
+                        x:
+                            cos(
+                                radians
+                            ) *
+                            selectionOffset,
+                        y:
+                            sin(
+                                radians
+                            ) *
+                            selectionOffset
+                    )
+                    .shadow(
+                        color:
+                            isSelected
+                            ? point.color
+                                .opacity(
+                                    0.24
+                                )
+                            : .clear,
+                        radius:
+                            isSelected
+                            ? 8
+                            : 0
+                    )
+                    .contentShape(
+                        DonutSliceShape(
+                            startAngle:
+                                point.startAngle,
+                            endAngle:
+                                point.endAngle,
+                            innerRadiusRatio:
+                                innerRadius /
+                                outerRadius
+                        )
+                    )
+                    .onTapGesture {
+
+                        toggleSelection(
+                            point.id
+                        )
+                    }
+                    .accessibilityLabel(
+                        point.accessibilityText
+                    )
+                    .accessibilityAddTraits(
+                        isSelected
+                        ? .isSelected
+                        : []
+                    )
+                    .zIndex(
+                        isSelected
+                        ? 3
+                        : 1
                     )
                 }
 
@@ -2592,37 +2828,21 @@ private struct CategoryDonutBreakdownView: View {
                             innerRadius *
                             2
                     )
+                    .contentShape(
+                        Circle()
+                    )
+                    .onTapGesture {
+
+                        clearSelection()
+                    }
+                    .zIndex(4)
 
 
-                VStack(
-                    spacing: 4
-                ) {
-
-                    Text(
-                        "支出占比"
+                centerContent
+                    .zIndex(5)
+                    .allowsHitTesting(
+                        false
                     )
-                    .font(
-                        .caption
-                    )
-                    .foregroundStyle(
-                        .secondary
-                    )
-
-                    Text(
-                        points
-                            .reduce(0) {
-                                $0 + $1.amount
-                            },
-                        format:
-                            .currency(
-                                code:
-                                    "CNY"
-                            )
-                    )
-                    .font(
-                        .headline
-                    )
-                }
 
 
                 ForEach(
@@ -2633,6 +2853,15 @@ private struct CategoryDonutBreakdownView: View {
                         labelLayouts[
                             point.id
                         ] {
+
+                        let isSelected =
+                            selectedCategoryID ==
+                            point.id
+
+                        let hasSelection =
+                            selectedCategoryID !=
+                            nil
+
 
                         Path { path in
 
@@ -2653,13 +2882,21 @@ private struct CategoryDonutBreakdownView: View {
                         }
                         .stroke(
                             point.color.opacity(
-                                0.78
+                                hasSelection &&
+                                !isSelected
+                                ? 0.24
+                                : 0.82
                             ),
                             style:
                                 StrokeStyle(
-                                    lineWidth: 1.5,
-                                    lineCap: .round,
-                                    lineJoin: .round
+                                    lineWidth:
+                                        isSelected
+                                        ? 2
+                                        : 1.4,
+                                    lineCap:
+                                        .round,
+                                    lineJoin:
+                                        .round
                                 )
                         )
 
@@ -2669,8 +2906,14 @@ private struct CategoryDonutBreakdownView: View {
                                 point.color
                             )
                             .frame(
-                                width: 6,
-                                height: 6
+                                width:
+                                    isSelected
+                                    ? 7
+                                    : 5,
+                                height:
+                                    isSelected
+                                    ? 7
+                                    : 5
                             )
                             .position(
                                 layout.start
@@ -2678,20 +2921,31 @@ private struct CategoryDonutBreakdownView: View {
 
 
                         Text(
-                            point.percentageText
+                            "\(point.category) \(point.percentageText)"
+                        )
+                        .lineLimit(
+                            1
+                        )
+                        .minimumScaleFactor(
+                            0.78
                         )
                         .font(
                             .caption2
                                 .weight(
-                                    .semibold
+                                    isSelected
+                                    ? .bold
+                                    : .semibold
                                 )
                         )
                         .foregroundStyle(
-                            .primary
+                            hasSelection &&
+                            !isSelected
+                            ? .secondary
+                            : .primary
                         )
                         .padding(
                             .horizontal,
-                            8
+                            7
                         )
                         .padding(
                             .vertical,
@@ -2702,21 +2956,26 @@ private struct CategoryDonutBreakdownView: View {
                                 .systemBackground
                             )
                             .opacity(
-                                0.95
+                                0.96
                             )
                         )
+                        .overlay {
+
+                            if isSelected {
+
+                                Capsule()
+                                    .stroke(
+                                        point.color
+                                            .opacity(
+                                                0.55
+                                            ),
+                                        lineWidth:
+                                            1
+                                    )
+                            }
+                        }
                         .clipShape(
                             Capsule()
-                        )
-                        .shadow(
-                            color:
-                                .black.opacity(
-                                    0.04
-                                ),
-                            radius:
-                                1,
-                            x: 0,
-                            y: 1
                         )
                         .position(
                             x:
@@ -2724,8 +2983,8 @@ private struct CategoryDonutBreakdownView: View {
                             y:
                                 layout.end.y
                         )
-                        .accessibilityLabel(
-                            point.accessibilityText
+                        .allowsHitTesting(
+                            false
                         )
                     }
                 }
@@ -2736,8 +2995,151 @@ private struct CategoryDonutBreakdownView: View {
                 maxHeight:
                     .infinity
             )
+            .animation(
+                .snappy(
+                    duration:
+                        0.24
+                ),
+                value:
+                    selectedCategoryID
+            )
         }
     }
+
+
+    @ViewBuilder
+    private var centerContent:
+        some View {
+
+        if let selected =
+            points.first(
+                where: {
+                    $0.id ==
+                    selectedCategoryID
+                }
+            ) {
+
+            VStack(
+                spacing: 3
+            ) {
+
+                Text(
+                    selected.category
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    selected.color
+                )
+
+                Text(
+                    selected.amount,
+                    format:
+                        .currency(
+                            code:
+                                "CNY"
+                        )
+                )
+                .font(
+                    .headline
+                )
+
+                Text(
+                    selected.percentageText
+                )
+                .font(
+                    .caption2
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } else {
+
+            VStack(
+                spacing: 4
+            ) {
+
+                Text(
+                    "支出占比"
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+                Text(
+                    points
+                        .reduce(0) {
+                            $0 + $1.amount
+                        },
+                    format:
+                        .currency(
+                            code:
+                                "CNY"
+                        )
+                )
+                .font(
+                    .headline
+                )
+            }
+        }
+    }
+
+
+    private func toggleSelection(
+        _ categoryID:
+            String
+    ) {
+
+        withAnimation(
+            .snappy(
+                duration:
+                    0.24
+            )
+        ) {
+
+            if selectedCategoryID ==
+                categoryID {
+
+                selectedCategoryID =
+                    nil
+
+            } else {
+
+                selectedCategoryID =
+                    categoryID
+            }
+        }
+    }
+
+
+    private func clearSelection() {
+
+        guard selectedCategoryID !=
+                nil
+        else {
+
+            return
+        }
+
+
+        withAnimation(
+            .snappy(
+                duration:
+                    0.24
+            )
+        ) {
+
+            selectedCategoryID =
+                nil
+        }
+    }
+
 
     private func resolvedLabelLayouts(
         center:
@@ -2747,7 +3149,9 @@ private struct CategoryDonutBreakdownView: View {
         calloutRadius:
             CGFloat,
         horizontalExtension:
-            CGFloat
+            CGFloat,
+        bounds:
+            CGSize
     ) -> [String: CategoryCalloutLayout] {
 
         let rawLayouts =
@@ -2780,9 +3184,11 @@ private struct CategoryDonutBreakdownView: View {
 
                 let bendX =
                     center.x +
-                    (isRightSide
-                     ? calloutRadius
-                     : -calloutRadius)
+                    (
+                        isRightSide
+                        ? calloutRadius
+                        : -calloutRadius
+                    )
 
                 let proposedY =
                     center.y +
@@ -2793,9 +3199,32 @@ private struct CategoryDonutBreakdownView: View {
 
                 let endX =
                     bendX +
-                    (isRightSide
-                     ? horizontalExtension
-                     : -horizontalExtension)
+                    (
+                        isRightSide
+                        ? horizontalExtension
+                        : -horizontalExtension
+                    )
+
+                // 标签中心距离末端约 39pt，
+                // 同时限制在当前视图边界内。
+                let rawTextX =
+                    endX +
+                    (
+                        isRightSide
+                        ? 39
+                        : -39
+                    )
+
+                let textAnchorX =
+                    min(
+                        max(
+                            rawTextX,
+                            50
+                        ),
+                        bounds.width -
+                        50
+                    )
+
 
                 return CategoryCalloutLayout(
                     id:
@@ -2817,27 +3246,33 @@ private struct CategoryDonutBreakdownView: View {
                                 proposedY
                         ),
                     textAnchorX:
-                        endX +
-                        (isRightSide
-                         ? 26
-                         : -26),
+                        textAnchorX,
                     isRightSide:
                         isRightSide
                 )
             }
 
+
         let topLimit =
-            center.y -
-            outerRadius -
-            14
+            max(
+                18,
+                center.y -
+                outerRadius -
+                30
+            )
 
         let bottomLimit =
-            center.y +
-            outerRadius +
-            14
+            min(
+                bounds.height -
+                18,
+                center.y +
+                outerRadius +
+                30
+            )
 
         let minimumGap:
-            CGFloat = 18
+            CGFloat = 25
+
 
         let leftAdjusted =
             adjustSideLayouts(
@@ -2853,6 +3288,7 @@ private struct CategoryDonutBreakdownView: View {
                     minimumGap
             )
 
+
         let rightAdjusted =
             adjustSideLayouts(
                 rawLayouts
@@ -2866,6 +3302,7 @@ private struct CategoryDonutBreakdownView: View {
                 minimumGap:
                     minimumGap
             )
+
 
         return Dictionary(
             uniqueKeysWithValues:
@@ -2881,6 +3318,7 @@ private struct CategoryDonutBreakdownView: View {
                 }
         )
     }
+
 
     private func adjustSideLayouts(
         _ layouts:
@@ -2898,21 +3336,26 @@ private struct CategoryDonutBreakdownView: View {
             return []
         }
 
+
         var adjusted =
             layouts.sorted {
                 $0.end.y <
                 $1.end.y
             }
 
+
         var previousY =
             topLimit -
             minimumGap
+
 
         for index in
             adjusted.indices {
 
             var layout =
-                adjusted[index]
+                adjusted[
+                    index
+                ]
 
             let newY =
                 max(
@@ -2927,12 +3370,15 @@ private struct CategoryDonutBreakdownView: View {
             layout.end.y =
                 newY
 
-            adjusted[index] =
+            adjusted[
+                index
+            ] =
                 layout
 
             previousY =
                 newY
         }
+
 
         if let last =
             adjusted.last,
@@ -2943,16 +3389,20 @@ private struct CategoryDonutBreakdownView: View {
                 last.end.y -
                 bottomLimit
 
+
             for index in
                 adjusted.indices
                     .reversed() {
 
                 var layout =
-                    adjusted[index]
+                    adjusted[
+                        index
+                    ]
 
                 let shiftedY =
                     layout.end.y -
                     overflow
+
 
                 if index <
                     adjusted.count -
@@ -2960,7 +3410,8 @@ private struct CategoryDonutBreakdownView: View {
 
                     let nextY =
                         adjusted[
-                            index + 1
+                            index +
+                            1
                         ]
                         .end.y -
                         minimumGap
@@ -2977,6 +3428,7 @@ private struct CategoryDonutBreakdownView: View {
                         shiftedY
                 }
 
+
                 layout.end.y =
                     max(
                         layout.end.y,
@@ -2986,10 +3438,13 @@ private struct CategoryDonutBreakdownView: View {
                 layout.bend.y =
                     layout.end.y
 
-                adjusted[index] =
+                adjusted[
+                    index
+                ] =
                     layout
             }
         }
+
 
         return adjusted
     }
