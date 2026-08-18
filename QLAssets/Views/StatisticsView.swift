@@ -3234,7 +3234,7 @@ private struct CategoryDonutBreakdownView: View {
 
 
         let sidePadding:
-            CGFloat = 10
+            CGFloat = 18
 
         let labelInsetFromLineEnd:
             CGFloat = 6
@@ -3635,6 +3635,26 @@ private struct CategoryDonutBreakdownView: View {
         let labelGap:
             CGFloat = 7
 
+        let labelSafeMargin:
+            CGFloat = 18
+
+        let halfLabelWidth =
+            result.labelFrameWidth /
+            2
+
+        result.textAnchorX =
+            min(
+                max(
+                    result.textAnchorX,
+                    labelSafeMargin +
+                    halfLabelWidth
+                ),
+                center.x *
+                2 -
+                labelSafeMargin -
+                halfLabelWidth
+            )
+
 
         if result.isRightSide {
 
@@ -3695,31 +3715,38 @@ private struct CategoryDonutBreakdownView: View {
                 )
 
 
-            // 第二段继续向右。
-            if result.end.x <
-                bendX +
-                minimumHorizontalLength {
+            // 标签必须始终留在显示区域内。
+            // 水平线末端贴近标签左侧，不允许为了拉长线把标签推出屏幕。
+            let labelLeftEdge =
+                result.textAnchorX -
+                result.labelFrameWidth /
+                2
 
-                result.end.x =
-                    bendX +
-                    minimumHorizontalLength
+            result.end.x =
+                labelLeftEdge -
+                labelGap
 
-                result.textAnchorX =
-                    max(
-                        result.textAnchorX,
-                        result.end.x +
-                        result.labelFrameWidth /
-                        2 +
-                        labelGap
-                    )
-            }
 
+            // 优先保证折点安全；如果空间不足，
+            // 只缩短水平段，不移动标签。
+            let availableHorizontal =
+                max(
+                    result.end.x -
+                    bendX,
+                    10
+                )
+
+            let horizontalLength =
+                min(
+                    minimumHorizontalLength,
+                    availableHorizontal
+                )
 
             bendX =
                 min(
                     bendX,
                     result.end.x -
-                    minimumHorizontalLength
+                    horizontalLength
                 )
 
             result.bend =
@@ -3788,31 +3815,38 @@ private struct CategoryDonutBreakdownView: View {
                 )
 
 
-            // 第二段继续向左。
-            if result.end.x >
-                bendX -
-                minimumHorizontalLength {
+            // 标签必须始终留在显示区域内。
+            // 水平线末端贴近标签右侧，不允许为了拉长线把标签推出屏幕。
+            let labelRightEdge =
+                result.textAnchorX +
+                result.labelFrameWidth /
+                2
 
-                result.end.x =
+            result.end.x =
+                labelRightEdge +
+                labelGap
+
+
+            // 优先保证折点安全；如果空间不足，
+            // 只缩短水平段，不移动标签。
+            let availableHorizontal =
+                max(
                     bendX -
-                    minimumHorizontalLength
+                    result.end.x,
+                    10
+                )
 
-                result.textAnchorX =
-                    min(
-                        result.textAnchorX,
-                        result.end.x -
-                        result.labelFrameWidth /
-                        2 -
-                        labelGap
-                    )
-            }
-
+            let horizontalLength =
+                min(
+                    minimumHorizontalLength,
+                    availableHorizontal
+                )
 
             bendX =
                 max(
                     bendX,
                     result.end.x +
-                    minimumHorizontalLength
+                    horizontalLength
                 )
 
             result.bend =
