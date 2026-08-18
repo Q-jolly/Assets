@@ -2981,7 +2981,8 @@ private struct CategoryDonutBreakdownView: View {
                             x:
                                 layout.textAnchorX,
                             y:
-                                layout.end.y
+                                layout.end.y -
+                                18
                         )
                         .allowsHitTesting(
                             false
@@ -3214,8 +3215,8 @@ private struct CategoryDonutBreakdownView: View {
                 let labelGap:
                     CGFloat = 10
 
-                // 让文字气泡出现在折线末端之外，
-                // 不要压在线段上。
+                // 让文字气泡出现在折线末端之外。
+                // 最终文字位置会再上移，不压在线段上。
                 let rawTextX =
                     endX +
                     (
