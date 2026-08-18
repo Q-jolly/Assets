@@ -2982,7 +2982,7 @@ private struct CategoryDonutBreakdownView: View {
                                 layout.textAnchorX,
                             y:
                                 layout.end.y -
-                                18
+                                layout.labelVerticalOffset
                         )
                         .allowsHitTesting(
                             false
@@ -3230,56 +3230,33 @@ private struct CategoryDonutBreakdownView: View {
             }
 
 
-        let sidePadding:
-            CGFloat = 14
+        // 参考信息图的布局：
+        // 1. 从扇区边缘先斜向外走一段；
+        // 2. 到固定的左右“折点列”；
+        // 3. 再水平延伸到屏幕左右两侧；
+        // 4. 标签统一贴在线末端上方。
+        let edgePadding:
+            CGFloat = 18
 
-        let labelInsetFromLineEnd:
-            CGFloat = 6
-
-        let maxLeftWidth =
-            rawSeeds
-                .filter {
-                    !$0.isRightSide
-                }
-                .map {
-                    $0.labelWidth
-                }
-                .max() ?? 0
-
-        let maxRightWidth =
-            rawSeeds
-                .filter {
-                    $0.isRightSide
-                }
-                .map {
-                    $0.labelWidth
-                }
-                .max() ?? 0
-
-        let desiredLeftLineEndX =
-            center.x -
-            outerRadius -
-            62
-
-        let desiredRightLineEndX =
-            center.x +
-            outerRadius +
-            62
+        let labelVerticalOffset:
+            CGFloat = 16
 
         let leftLineEndX =
-            max(
-                maxLeftWidth +
-                sidePadding,
-                desiredLeftLineEndX
-            )
+            edgePadding
 
         let rightLineEndX =
-            min(
-                bounds.width -
-                maxRightWidth -
-                sidePadding,
-                desiredRightLineEndX
-            )
+            bounds.width -
+            edgePadding
+
+        let leftBendX =
+            center.x -
+            outerRadius -
+            26
+
+        let rightBendX =
+            center.x +
+            outerRadius +
+            26
 
         let rawLayouts =
             rawSeeds.map { seed in
@@ -3289,73 +3266,21 @@ private struct CategoryDonutBreakdownView: View {
                     ? rightLineEndX
                     : leftLineEndX
 
+                let bendX =
+                    seed.isRightSide
+                    ? rightBendX
+                    : leftBendX
+
                 let textAnchorX =
                     seed.isRightSide
                     ? (
-                        endX +
-                        labelInsetFromLineEnd +
+                        rightLineEndX -
                         seed.labelWidth / 2
                     )
                     : (
-                        endX -
-                        labelInsetFromLineEnd -
+                        leftLineEndX +
                         seed.labelWidth / 2
                     )
-
-                let bendX: CGFloat
-
-                if seed.isRightSide {
-
-                    let available =
-                        max(
-                            endX -
-                            seed.start.x,
-                            18
-                        )
-
-                    let diagonalLength =
-                        min(
-                            24,
-                            max(
-                                10,
-                                available *
-                                0.42
-                            )
-                        )
-
-                    bendX =
-                        min(
-                            seed.start.x +
-                            diagonalLength,
-                            endX - 8
-                        )
-
-                } else {
-
-                    let available =
-                        max(
-                            seed.start.x -
-                            endX,
-                            18
-                        )
-
-                    let diagonalLength =
-                        min(
-                            24,
-                            max(
-                                10,
-                                available *
-                                0.42
-                            )
-                        )
-
-                    bendX =
-                        max(
-                            seed.start.x -
-                            diagonalLength,
-                            endX + 8
-                        )
-                }
 
                 return CategoryCalloutLayout(
                     id:
@@ -3379,7 +3304,9 @@ private struct CategoryDonutBreakdownView: View {
                     textAnchorX:
                         textAnchorX,
                     isRightSide:
-                        seed.isRightSide
+                        seed.isRightSide,
+                    labelVerticalOffset:
+                        labelVerticalOffset
                 )
             }
 
@@ -3638,6 +3565,9 @@ private struct CategoryCalloutLayout {
 
     let isRightSide:
         Bool
+
+    let labelVerticalOffset:
+        CGFloat
 }
 
 
