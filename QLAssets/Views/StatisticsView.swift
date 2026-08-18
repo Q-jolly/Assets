@@ -3187,8 +3187,8 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? (outerRadius + 26)
-                        : -(outerRadius + 26)
+                        ? (outerRadius + 18)
+                        : -(outerRadius + 18)
                     )
 
                 let proposedY =
@@ -3204,27 +3204,60 @@ private struct CategoryDonutBreakdownView: View {
                             "\(point.category) \(point.percentageText)"
                     )
 
-                let labelGap:
-                    CGFloat = 8
-
                 let halfWidth =
                     estimatedLabelWidth / 2
 
-                // 让文字出现在引导线“末端的上方”，
-                // 不是压在横线中段。
-                let preferredTextAnchorX =
+                let labelGap:
+                    CGFloat = 8
+
+                // 一折线：从圆环先斜着连到拐点，
+                // 再水平连到线末端；文字放在线末端外侧上方。
+                let preferredEndX =
                     center.x +
                     (
                         isRightSide
                         ? (
                             outerRadius +
-                            92 +
-                            halfWidth
+                            104 +
+                            horizontalExtension
                         )
                         : -(
                             outerRadius +
-                            92 +
-                            halfWidth
+                            104 +
+                            horizontalExtension
+                        )
+                    )
+
+                let minEndX =
+                    isRightSide
+                    ? (bendX + 28)
+                    : 8
+
+                let maxEndX =
+                    isRightSide
+                    ? (bounds.width - halfWidth - labelGap - 8)
+                    : (bendX - 28)
+
+                let endX =
+                    min(
+                        max(
+                            preferredEndX,
+                            minEndX
+                        ),
+                        maxEndX
+                    )
+
+                let preferredTextAnchorX =
+                    endX +
+                    (
+                        isRightSide
+                        ? (
+                            halfWidth +
+                            labelGap
+                        )
+                        : -(
+                            halfWidth +
+                            labelGap
                         )
                     )
 
@@ -3237,20 +3270,6 @@ private struct CategoryDonutBreakdownView: View {
                         bounds.width -
                         halfWidth -
                         8
-                    )
-
-                let endX =
-                    textAnchorX +
-                    (
-                        isRightSide
-                        ? -(
-                            halfWidth +
-                            labelGap
-                        )
-                        : (
-                            halfWidth +
-                            labelGap
-                        )
                     )
 
 
