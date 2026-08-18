@@ -2951,11 +2951,8 @@ private struct CategoryDonutBreakdownView: View {
                             .vertical,
                             3
                         )
-                        .frame(
-                            width:
-                                layout.labelFrameWidth,
-                            alignment:
-                                .center
+                        .multilineTextAlignment(
+                            .center
                         )
                         .background(
                             Color(
@@ -3338,7 +3335,11 @@ private struct CategoryDonutBreakdownView: View {
                 bottomLimit:
                     bottomLimit,
                 minimumGap:
-                    minimumGap
+                    minimumGap,
+                center:
+                    center,
+                outerRadius:
+                    outerRadius
             )
 
 
@@ -3353,7 +3354,11 @@ private struct CategoryDonutBreakdownView: View {
                 bottomLimit:
                     bottomLimit,
                 minimumGap:
-                    minimumGap
+                    minimumGap,
+                center:
+                    center,
+                outerRadius:
+                    outerRadius
             )
 
 
@@ -3383,18 +3388,18 @@ private struct CategoryDonutBreakdownView: View {
                 partial, character in
 
                 if character.isASCII {
-                    return partial + 7
+                    return partial + 6.6
                 } else {
-                    return partial + 12.5
+                    return partial + 12
                 }
             }
 
         return min(
             max(
-                baseWidth + 14,
-                66
+                baseWidth + 12,
+                58
             ),
-            120
+            108
         )
     }
 
@@ -3407,6 +3412,10 @@ private struct CategoryDonutBreakdownView: View {
         bottomLimit:
             CGFloat,
         minimumGap:
+            CGFloat,
+        center:
+            CGPoint,
+        outerRadius:
             CGFloat
     ) -> [CategoryCalloutLayout] {
 
@@ -3525,7 +3534,157 @@ private struct CategoryDonutBreakdownView: View {
         }
 
 
-        return adjusted
+        return adjusted.map {
+            layout in
+
+            outwardAdjustedLayout(
+                layout,
+                center:
+                    center,
+                outerRadius:
+                    outerRadius
+            )
+        }
+    }
+
+
+    private func outwardAdjustedLayout(
+        _ layout:
+            CategoryCalloutLayout,
+        center:
+            CGPoint,
+        outerRadius:
+            CGFloat
+    ) -> CategoryCalloutLayout {
+
+        var result =
+            layout
+
+
+        let radialX =
+            result.start.x -
+            center.x
+
+        let radialY =
+            result.start.y -
+            center.y
+
+        let radialLength =
+            max(
+                sqrt(
+                    radialX *
+                    radialX +
+                    radialY *
+                    radialY
+                ),
+                0.001
+            )
+
+        let unitX =
+            radialX /
+            radialLength
+
+        let unitY =
+            radialY /
+            radialLength
+
+        let deltaY =
+            result.end.y -
+            result.start.y
+
+        let minimumOutwardProjection:
+            CGFloat = 16
+
+        let minimumHorizontalLength:
+            CGFloat = 34
+
+        let tangentGap:
+            CGFloat = 16
+
+
+        if result.isRightSide {
+
+            let requiredDeltaX =
+                (
+                    minimumOutwardProjection -
+                    deltaY *
+                    unitY
+                ) /
+                max(
+                    unitX,
+                    0.08
+                )
+
+            let projectionSafeX =
+                result.start.x +
+                max(
+                    requiredDeltaX,
+                    14
+                )
+
+            let outsideCircleX =
+                center.x +
+                outerRadius +
+                tangentGap
+
+            let preferredBendX =
+                max(
+                    projectionSafeX,
+                    outsideCircleX
+                )
+
+            result.bend.x =
+                min(
+                    preferredBendX,
+                    result.end.x -
+                    minimumHorizontalLength
+                )
+
+        } else {
+
+            let requiredDeltaX =
+                (
+                    minimumOutwardProjection -
+                    deltaY *
+                    unitY
+                ) /
+                min(
+                    unitX,
+                    -0.08
+                )
+
+            let projectionSafeX =
+                result.start.x +
+                min(
+                    requiredDeltaX,
+                    -14
+                )
+
+            let outsideCircleX =
+                center.x -
+                outerRadius -
+                tangentGap
+
+            let preferredBendX =
+                min(
+                    projectionSafeX,
+                    outsideCircleX
+                )
+
+            result.bend.x =
+                max(
+                    preferredBendX,
+                    result.end.x +
+                    minimumHorizontalLength
+                )
+        }
+
+
+        // 第二段严格水平。
+        result.bend.y =
+            result.end.y
+
+        return result
     }
 }
 
@@ -3559,6 +3718,7 @@ private struct CategoryCalloutLayout {
     let textAnchorX:
         CGFloat
 
+    // 用于估算标签定位；显示时不强制撑到这个宽度。
     let labelFrameWidth:
         CGFloat
 
