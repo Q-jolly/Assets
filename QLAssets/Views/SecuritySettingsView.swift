@@ -95,7 +95,7 @@ struct SecuritySettingsView:
             } footer: {
 
                 Text(
-                    "开启后，QL Assets 每次离开前台都会重新锁定，可使用 Face ID、Touch ID 或设备密码解锁。"
+                    "开启后，QL Assets 离开后台超过 5 分钟才会重新锁定；5 分钟内切回可直接继续使用。冷启动和“立即锁定”仍会要求身份验证。"
                 )
             }
 
@@ -129,6 +129,12 @@ struct SecuritySettingsView:
                     value:
                         appLock
                             .authenticationTitle
+                )
+
+                LabeledContent(
+                    "自动锁定",
+                    value:
+                        "离开 5 分钟后"
                 )
 
                 LabeledContent(

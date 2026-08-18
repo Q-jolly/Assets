@@ -34,13 +34,20 @@ struct AppLockContainerView:
                 AppLockedView()
                     .transition(
                         .opacity
+                            .combined(
+                                with:
+                                    .scale(
+                                        scale:
+                                            0.985
+                                    )
+                            )
                     )
                     .zIndex(20)
             }
 
 
-            if scenePhase !=
-                .active &&
+            if scenePhase ==
+                .background &&
                appLock
                 .hideInAppSwitcher {
 
@@ -49,9 +56,9 @@ struct AppLockContainerView:
             }
         }
         .animation(
-            .easeInOut(
+            .easeOut(
                 duration:
-                    0.18
+                    0.10
             ),
             value:
                 appLock
@@ -60,7 +67,7 @@ struct AppLockContainerView:
         .onAppear {
 
             appLock
-                .lockIfNeeded()
+                .prepareForLaunch()
 
             guard
                 appLock
@@ -89,8 +96,11 @@ struct AppLockContainerView:
 
             case .active:
 
-                if appLock
-                    .isLocked {
+                let needsUnlock =
+                    appLock
+                        .shouldUnlockAfterBecomingActive()
+
+                if needsUnlock {
 
                     Task {
 
@@ -100,16 +110,20 @@ struct AppLockContainerView:
                     }
                 }
 
-            case .inactive,
-                 .background:
+            case .background:
 
                 appLock
-                    .lockIfNeeded()
+                    .didEnterBackground()
+
+            case .inactive:
+
+                // Face ID、控制中心、通知中心等都会短暂进入 inactive。
+                // 这里不锁定，也不启动 5 分钟计时。
+                break
 
             @unknown default:
 
-                appLock
-                    .lockIfNeeded()
+                break
             }
         }
     }

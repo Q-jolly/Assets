@@ -13,6 +13,15 @@ final class AppLockManager:
         "security.hideInAppSwitcher"
 
 
+    static let automaticLockDelay:
+        TimeInterval =
+            5 * 60
+
+
+    private var backgroundEnteredAt:
+        Date?
+
+
     @Published
     private(set)
     var isLocked =
@@ -52,6 +61,9 @@ final class AppLockManager:
                 )
 
             if !newValue {
+
+                backgroundEnteredAt =
+                    nil
 
                 isLocked =
                     false
@@ -145,7 +157,11 @@ final class AppLockManager:
     }
 
 
-    func lockIfNeeded() {
+    func prepareForLaunch() {
+
+        backgroundEnteredAt =
+            nil
+
 
         guard isAppLockEnabled
         else {
@@ -156,8 +172,103 @@ final class AppLockManager:
             return
         }
 
+
+        // 冷启动仍然需要验证。
         isLocked =
             true
+    }
+
+
+    func didEnterBackground(
+        at date:
+            Date =
+                Date()
+    ) {
+
+        guard isAppLockEnabled
+        else {
+
+            backgroundEnteredAt =
+                nil
+
+            isLocked =
+                false
+
+            return
+        }
+
+
+        // 这里只记录离开时间，不立刻锁定。
+        backgroundEnteredAt =
+            date
+    }
+
+
+    func shouldUnlockAfterBecomingActive(
+        at date:
+            Date =
+                Date()
+    ) -> Bool {
+
+        guard isAppLockEnabled
+        else {
+
+            backgroundEnteredAt =
+                nil
+
+            isLocked =
+                false
+
+            return false
+        }
+
+
+        // 手动“立即锁定”或冷启动产生的锁定，
+        // 回到前台时仍然需要解锁。
+        if isLocked {
+
+            backgroundEnteredAt =
+                nil
+
+            return true
+        }
+
+
+        guard
+            let backgroundEnteredAt
+        else {
+
+            return false
+        }
+
+
+        self.backgroundEnteredAt =
+            nil
+
+
+        let elapsed =
+            max(
+                0,
+                date.timeIntervalSince(
+                    backgroundEnteredAt
+                )
+            )
+
+
+        guard elapsed >=
+                Self
+                    .automaticLockDelay
+        else {
+
+            // 5 分钟宽限期内直接回到 App。
+            return false
+        }
+
+
+        isLocked =
+            true
+
+        return true
     }
 
 
@@ -167,6 +278,10 @@ final class AppLockManager:
         else {
             return
         }
+
+
+        backgroundEnteredAt =
+            nil
 
         isLocked =
             true
