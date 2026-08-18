@@ -66,6 +66,30 @@ enum CardImageProcessor {
         }
 
 
+        // Apple Wallet / 银行 App 截图中的银行卡通常是
+        // 一个位于屏幕上半部的大型横向卡片。
+        //
+        // Vision 对圆角卡片偶尔无法返回矩形，此时不要再直接
+        // 对整张竖屏截图做中心裁切，否则很容易裁到大片灰色背景。
+        if let screenshotCard =
+            detectCardInPortraitScreenshot(
+                normalizedImage
+            ),
+           let data =
+            jpegData(
+                from:
+                    screenshotCard
+            ) {
+
+            return CardImageExtractionResult(
+                imageData:
+                    data,
+                usedRectangleDetection:
+                    false
+            )
+        }
+
+
         guard
             let fallbackImage =
                 centerCropToCardRatio(
@@ -111,22 +135,24 @@ enum CardImageProcessor {
             VNDetectRectanglesRequest()
 
         request.maximumObservations =
-            6
+            12
 
         request.minimumConfidence =
-            0.45
+            0.20
 
         request.minimumSize =
-            0.16
+            0.14
 
+        // Vision 的 aspectRatio 定义为“短边 / 长边”。
+        // 银行卡 85.60:53.98 的对应值约为 0.63。
         request.minimumAspectRatio =
-            0.45
+            0.52
 
         request.maximumAspectRatio =
-            1.0
+            0.76
 
         request.quadratureTolerance =
-            35
+            45
 
 
         let handler =
@@ -372,6 +398,840 @@ enum CardImageProcessor {
         return centerCropToCardRatio(
             result
         )
+    }
+
+
+    // MARK: - 竖屏截图银行卡检测
+
+    private struct ScreenshotCardCandidate {
+
+        let rect:
+            CGRect
+
+        let score:
+            Double
+    }
+
+
+    private static func detectCardInPortraitScreenshot(
+        _ image:
+            UIImage
+    ) -> UIImage? {
+
+        guard
+            let cgImage =
+                image.cgImage
+        else {
+
+            return nil
+        }
+
+
+        let sourceWidth =
+            cgImage.width
+
+        let sourceHeight =
+            cgImage.height
+
+
+        guard
+            sourceWidth > 0,
+            sourceHeight > 0
+        else {
+
+            return nil
+        }
+
+
+        let sourceRatio =
+            Double(
+                sourceHeight
+            ) /
+            Double(
+                sourceWidth
+            )
+
+
+        // 只对明显的竖屏图使用这个启发式。
+        // 普通银行卡近景照片仍然优先交给 Vision 矩形检测。
+        guard sourceRatio >=
+                1.25
+        else {
+
+            return nil
+        }
+
+
+        let sampleWidth =
+            180
+
+        let sampleHeight =
+            max(
+                180,
+                Int(
+                    Double(
+                        sourceHeight
+                    ) /
+                    Double(
+                        sourceWidth
+                    ) *
+                    Double(
+                        sampleWidth
+                    )
+                )
+            )
+
+
+        guard
+            let grayscale =
+                makeGrayscaleSample(
+                    from:
+                        cgImage,
+                    width:
+                        sampleWidth,
+                    height:
+                        sampleHeight
+                )
+        else {
+
+            return nil
+        }
+
+
+        let cardRatio =
+            Double(
+                bankCardAspectRatio
+            )
+
+
+        var bestCandidate:
+            ScreenshotCardCandidate?
+
+
+        // Wallet / 银行 App 的卡片通常宽度占屏幕 72%~96%，
+        // 顶部位于屏幕高度 6%~45% 之间。
+        for widthPercent in
+            stride(
+                from:
+                    72,
+                through:
+                    96,
+                by:
+                    2
+            ) {
+
+            let candidateWidth =
+                max(
+                    40,
+                    Int(
+                        Double(
+                            sampleWidth
+                        ) *
+                        Double(
+                            widthPercent
+                        ) /
+                        100.0
+                    )
+                )
+
+
+            let candidateHeight =
+                max(
+                    24,
+                    Int(
+                        Double(
+                            candidateWidth
+                        ) /
+                        cardRatio
+                    )
+                )
+
+
+            guard
+                candidateHeight <
+                    sampleHeight
+            else {
+
+                continue
+            }
+
+
+            // 卡片通常基本居中，但允许轻微左右偏移。
+            for centerPercent in
+                stride(
+                    from:
+                        46,
+                    through:
+                        54,
+                    by:
+                        2
+                ) {
+
+                let centerX =
+                    Int(
+                        Double(
+                            sampleWidth
+                        ) *
+                        Double(
+                            centerPercent
+                        ) /
+                        100.0
+                    )
+
+
+                let x =
+                    centerX -
+                    candidateWidth /
+                    2
+
+
+                guard
+                    x >= 3,
+                    x +
+                    candidateWidth +
+                    3 <
+                    sampleWidth
+                else {
+
+                    continue
+                }
+
+
+                for topPercent in
+                    stride(
+                        from:
+                            6,
+                        through:
+                            45,
+                        by:
+                            1
+                    ) {
+
+                    let y =
+                        Int(
+                            Double(
+                                sampleHeight
+                            ) *
+                            Double(
+                                topPercent
+                            ) /
+                            100.0
+                        )
+
+
+                    guard
+                        y >= 3,
+                        y +
+                        candidateHeight +
+                        3 <
+                        sampleHeight
+                    else {
+
+                        continue
+                    }
+
+
+                    let rect =
+                        CGRect(
+                            x:
+                                x,
+                            y:
+                                y,
+                            width:
+                                candidateWidth,
+                            height:
+                                candidateHeight
+                        )
+
+
+                    let score =
+                        screenshotCardEdgeScore(
+                            pixels:
+                                grayscale,
+                            width:
+                                sampleWidth,
+                            height:
+                                sampleHeight,
+                            rect:
+                                rect
+                        )
+
+
+                    guard
+                        score >
+                            0
+                    else {
+
+                        continue
+                    }
+
+
+                    if bestCandidate ==
+                        nil ||
+                       score >
+                        (
+                            bestCandidate?
+                                .score
+                            ?? 0
+                        ) {
+
+                        bestCandidate =
+                            ScreenshotCardCandidate(
+                                rect:
+                                    rect,
+                                score:
+                                    score
+                            )
+                    }
+                }
+            }
+        }
+
+
+        guard
+            let bestCandidate,
+            // 防止在普通竖图里把随机 UI 元素当成卡片。
+            bestCandidate.score >=
+                14.0
+        else {
+
+            return nil
+        }
+
+
+        let scaleX =
+            Double(
+                sourceWidth
+            ) /
+            Double(
+                sampleWidth
+            )
+
+        let scaleY =
+            Double(
+                sourceHeight
+            ) /
+            Double(
+                sampleHeight
+            )
+
+
+        let sourceRect =
+            CGRect(
+                x:
+                    bestCandidate
+                        .rect
+                        .origin
+                        .x *
+                    scaleX,
+                y:
+                    bestCandidate
+                        .rect
+                        .origin
+                        .y *
+                    scaleY,
+                width:
+                    bestCandidate
+                        .rect
+                        .width *
+                    scaleX,
+                height:
+                    bestCandidate
+                        .rect
+                        .height *
+                    scaleY
+            )
+            .integral
+            .intersection(
+                CGRect(
+                    x:
+                        0,
+                    y:
+                        0,
+                    width:
+                        sourceWidth,
+                    height:
+                        sourceHeight
+                )
+            )
+
+
+        guard
+            sourceRect.width >
+                10,
+            sourceRect.height >
+                10,
+            let cropped =
+                cgImage.cropping(
+                    to:
+                        sourceRect
+                )
+        else {
+
+            return nil
+        }
+
+
+        return UIImage(
+            cgImage:
+                cropped,
+            scale:
+                image.scale,
+            orientation:
+                .up
+        )
+    }
+
+
+    private static func screenshotCardEdgeScore(
+        pixels:
+            [UInt8],
+        width:
+            Int,
+        height:
+            Int,
+        rect:
+            CGRect
+    ) -> Double {
+
+        let x =
+            Int(
+                rect.origin.x
+            )
+
+        let y =
+            Int(
+                rect.origin.y
+            )
+
+        let w =
+            Int(
+                rect.width
+            )
+
+        let h =
+            Int(
+                rect.height
+            )
+
+
+        guard
+            w > 20,
+            h > 12
+        else {
+
+            return 0
+        }
+
+
+        let insetX =
+            max(
+                4,
+                Int(
+                    Double(
+                        w
+                    ) *
+                    0.10
+                )
+            )
+
+        let insetY =
+            max(
+                3,
+                Int(
+                    Double(
+                        h
+                    ) *
+                    0.10
+                )
+            )
+
+
+        let edgeGap =
+            2
+
+
+        var edgeTotal =
+            0.0
+
+        var edgeCount =
+            0
+
+
+        func value(
+            _ px:
+                Int,
+            _ py:
+                Int
+        ) -> Int {
+
+            guard
+                px >= 0,
+                px < width,
+                py >= 0,
+                py < height
+            else {
+
+                return 0
+            }
+
+            return Int(
+                pixels[
+                    py *
+                    width +
+                    px
+                ]
+            )
+        }
+
+
+        // 上、下边缘
+        if y -
+            edgeGap >= 0,
+           y +
+            edgeGap < height,
+           y +
+            h -
+            edgeGap >= 0,
+           y +
+            h +
+            edgeGap < height {
+
+            for px in stride(
+                from:
+                    x +
+                    insetX,
+                to:
+                    x +
+                    w -
+                    insetX,
+                by:
+                    2
+            ) {
+
+                edgeTotal +=
+                    Double(
+                        abs(
+                            value(
+                                px,
+                                y +
+                                edgeGap
+                            ) -
+                            value(
+                                px,
+                                y -
+                                edgeGap
+                            )
+                        )
+                    )
+
+                edgeCount +=
+                    1
+
+
+                edgeTotal +=
+                    Double(
+                        abs(
+                            value(
+                                px,
+                                y +
+                                h -
+                                edgeGap
+                            ) -
+                            value(
+                                px,
+                                y +
+                                h +
+                                edgeGap
+                            )
+                        )
+                    )
+
+                edgeCount +=
+                    1
+            }
+        }
+
+
+        // 左、右边缘
+        if x -
+            edgeGap >= 0,
+           x +
+            edgeGap < width,
+           x +
+            w -
+            edgeGap >= 0,
+           x +
+            w +
+            edgeGap < width {
+
+            for py in stride(
+                from:
+                    y +
+                    insetY,
+                to:
+                    y +
+                    h -
+                    insetY,
+                by:
+                    2
+            ) {
+
+                edgeTotal +=
+                    Double(
+                        abs(
+                            value(
+                                x +
+                                edgeGap,
+                                py
+                            ) -
+                            value(
+                                x -
+                                edgeGap,
+                                py
+                            )
+                        )
+                    )
+
+                edgeCount +=
+                    1
+
+
+                edgeTotal +=
+                    Double(
+                        abs(
+                            value(
+                                x +
+                                w -
+                                edgeGap,
+                                py
+                            ) -
+                            value(
+                                x +
+                                w +
+                                edgeGap,
+                                py
+                            )
+                        )
+                    )
+
+                edgeCount +=
+                    1
+            }
+        }
+
+
+        guard edgeCount >
+                0
+        else {
+
+            return 0
+        }
+
+
+        let edgeScore =
+            edgeTotal /
+            Double(
+                edgeCount
+            )
+
+
+        // 少量奖励卡片内部有纹理/图案。
+        // 权重很低，纯色银行卡也不会因此被排除。
+        var sampleValues:
+            [Double] = []
+
+
+        for py in stride(
+            from:
+                y +
+                insetY,
+            to:
+                y +
+                h -
+                insetY,
+            by:
+                max(
+                    3,
+                    h /
+                    12
+                )
+        ) {
+
+            for px in stride(
+                from:
+                    x +
+                    insetX,
+                to:
+                    x +
+                    w -
+                    insetX,
+                by:
+                    max(
+                        3,
+                        w /
+                        18
+                    )
+            ) {
+
+                sampleValues.append(
+                    Double(
+                        value(
+                            px,
+                            py
+                        )
+                    )
+                )
+            }
+        }
+
+
+        var textureBonus =
+            0.0
+
+
+        if sampleValues.count >
+            1 {
+
+            let mean =
+                sampleValues.reduce(
+                    0,
+                    +
+                ) /
+                Double(
+                    sampleValues.count
+                )
+
+
+            let variance =
+                sampleValues.reduce(
+                    0
+                ) {
+                    partial,
+                    current in
+
+                    let difference =
+                        current -
+                        mean
+
+                    return
+                        partial +
+                        difference *
+                        difference
+                } /
+                Double(
+                    sampleValues.count
+                )
+
+
+            textureBonus =
+                sqrt(
+                    variance
+                ) *
+                0.08
+        }
+
+
+        return
+            edgeScore +
+            textureBonus
+    }
+
+
+    private static func makeGrayscaleSample(
+        from cgImage:
+            CGImage,
+        width:
+            Int,
+        height:
+            Int
+    ) -> [UInt8]? {
+
+        guard
+            width > 0,
+            height > 0
+        else {
+
+            return nil
+        }
+
+
+        var pixels =
+            [UInt8](
+                repeating:
+                    0,
+                count:
+                    width *
+                    height
+            )
+
+
+        guard
+            let context =
+                CGContext(
+                    data:
+                        &pixels,
+                    width:
+                        width,
+                    height:
+                        height,
+                    bitsPerComponent:
+                        8,
+                    bytesPerRow:
+                        width,
+                    space:
+                        CGColorSpaceCreateDeviceGray(),
+                    bitmapInfo:
+                        CGImageAlphaInfo
+                            .none
+                            .rawValue
+                )
+        else {
+
+            return nil
+        }
+
+
+        // CGContext 默认坐标原点在左下角。
+        // 翻转后让像素数组和 UIImage / 截图一样从左上角开始。
+        context.translateBy(
+            x:
+                0,
+            y:
+                CGFloat(
+                    height
+                )
+        )
+
+        context.scaleBy(
+            x:
+                1,
+            y:
+                -1
+        )
+
+
+        context.interpolationQuality =
+            .medium
+
+
+        context.draw(
+            cgImage,
+            in:
+                CGRect(
+                    x:
+                        0,
+                    y:
+                        0,
+                    width:
+                        width,
+                    height:
+                        height
+                )
+        )
+
+
+        return pixels
     }
 
 
