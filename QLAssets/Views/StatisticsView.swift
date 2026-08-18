@@ -3205,24 +3205,43 @@ private struct CategoryDonutBreakdownView: View {
                         : -(outerRadius + 64 + horizontalExtension)
                     )
 
-                // 标签中心距离末端约 42pt，
-                // 同时限制在当前视图边界内。
+                let estimatedLabelWidth =
+                    estimatedCalloutLabelWidth(
+                        text:
+                            "\(point.category) \(point.percentageText)"
+                    )
+
+                let labelGap:
+                    CGFloat = 10
+
+                // 让文字气泡出现在折线末端之外，
+                // 不要压在线段上。
                 let rawTextX =
                     endX +
                     (
                         isRightSide
-                        ? 42
-                        : -42
+                        ? (
+                            labelGap +
+                            estimatedLabelWidth / 2
+                        )
+                        : -(
+                            labelGap +
+                            estimatedLabelWidth / 2
+                        )
                     )
+
+                let halfWidth =
+                    estimatedLabelWidth / 2
 
                 let textAnchorX =
                     min(
                         max(
                             rawTextX,
-                            50
+                            halfWidth + 8
                         ),
                         bounds.width -
-                        50
+                        halfWidth -
+                        8
                     )
 
 
@@ -3316,6 +3335,32 @@ private struct CategoryDonutBreakdownView: View {
                         $0
                     )
                 }
+        )
+    }
+
+
+    private func estimatedCalloutLabelWidth(
+        text:
+            String
+    ) -> CGFloat {
+
+        let baseWidth =
+            text.reduce(0) {
+                partial, character in
+
+                if character.isASCII {
+                    return partial + 7.5
+                } else {
+                    return partial + 13.5
+                }
+            }
+
+        return min(
+            max(
+                baseWidth + 18,
+                76
+            ),
+            144
         )
     }
 
@@ -3447,6 +3492,18 @@ private struct CategoryDonutBreakdownView: View {
 
 
         return adjusted
+    }
+}
+
+
+private extension Character {
+
+    var isASCII:
+        Bool {
+
+        unicodeScalars.allSatisfy {
+            $0.isASCII
+        }
     }
 }
 
