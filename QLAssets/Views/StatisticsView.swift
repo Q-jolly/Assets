@@ -2951,6 +2951,14 @@ private struct CategoryDonutBreakdownView: View {
                             .vertical,
                             4
                         )
+                        .frame(
+                            width:
+                                layout.labelFrameWidth,
+                            alignment:
+                                layout.isRightSide
+                                ? .leading
+                                : .trailing
+                        )
                         .background(
                             Color(
                                 .systemBackground
@@ -2982,7 +2990,7 @@ private struct CategoryDonutBreakdownView: View {
                                 layout.textAnchorX,
                             y:
                                 layout.end.y -
-                                layout.labelVerticalOffset
+                                18
                         )
                         .allowsHitTesting(
                             false
@@ -3230,33 +3238,56 @@ private struct CategoryDonutBreakdownView: View {
             }
 
 
-        // 参考信息图的布局：
-        // 1. 从扇区边缘先斜向外走一段；
-        // 2. 到固定的左右“折点列”；
-        // 3. 再水平延伸到屏幕左右两侧；
-        // 4. 标签统一贴在线末端上方。
-        let edgePadding:
+        let sidePadding:
             CGFloat = 18
 
-        let labelVerticalOffset:
-            CGFloat = 16
+        let labelInsetFromLineEnd:
+            CGFloat = 6
+
+        let maxLeftWidth =
+            rawSeeds
+                .filter {
+                    !$0.isRightSide
+                }
+                .map {
+                    $0.labelWidth
+                }
+                .max() ?? 0
+
+        let maxRightWidth =
+            rawSeeds
+                .filter {
+                    $0.isRightSide
+                }
+                .map {
+                    $0.labelWidth
+                }
+                .max() ?? 0
+
+        let leftColumnWidth =
+            maxLeftWidth
+
+        let rightColumnWidth =
+            maxRightWidth
+
+        let leftTextAnchorX =
+            sidePadding +
+            leftColumnWidth / 2
+
+        let rightTextAnchorX =
+            bounds.width -
+            sidePadding -
+            rightColumnWidth / 2
 
         let leftLineEndX =
-            edgePadding
+            leftTextAnchorX +
+            leftColumnWidth / 2 +
+            labelInsetFromLineEnd
 
         let rightLineEndX =
-            bounds.width -
-            edgePadding
-
-        let leftBendX =
-            center.x -
-            outerRadius -
-            26
-
-        let rightBendX =
-            center.x +
-            outerRadius +
-            26
+            rightTextAnchorX -
+            rightColumnWidth / 2 -
+            labelInsetFromLineEnd
 
         let rawLayouts =
             rawSeeds.map { seed in
@@ -3266,21 +3297,70 @@ private struct CategoryDonutBreakdownView: View {
                     ? rightLineEndX
                     : leftLineEndX
 
-                let bendX =
-                    seed.isRightSide
-                    ? rightBendX
-                    : leftBendX
-
                 let textAnchorX =
                     seed.isRightSide
-                    ? (
-                        rightLineEndX -
-                        seed.labelWidth / 2
-                    )
-                    : (
-                        leftLineEndX +
-                        seed.labelWidth / 2
-                    )
+                    ? rightTextAnchorX
+                    : leftTextAnchorX
+
+                let labelFrameWidth =
+                    seed.isRightSide
+                    ? rightColumnWidth
+                    : leftColumnWidth
+
+                let bendX: CGFloat
+
+                if seed.isRightSide {
+
+                    let available =
+                        max(
+                            endX -
+                            seed.start.x,
+                            18
+                        )
+
+                    let diagonalLength =
+                        min(
+                            24,
+                            max(
+                                10,
+                                available *
+                                0.42
+                            )
+                        )
+
+                    bendX =
+                        min(
+                            seed.start.x +
+                            diagonalLength,
+                            endX - 8
+                        )
+
+                } else {
+
+                    let available =
+                        max(
+                            seed.start.x -
+                            endX,
+                            18
+                        )
+
+                    let diagonalLength =
+                        min(
+                            24,
+                            max(
+                                10,
+                                available *
+                                0.42
+                            )
+                        )
+
+                    bendX =
+                        max(
+                            seed.start.x -
+                            diagonalLength,
+                            endX + 8
+                        )
+                }
 
                 return CategoryCalloutLayout(
                     id:
@@ -3303,10 +3383,10 @@ private struct CategoryDonutBreakdownView: View {
                         ),
                     textAnchorX:
                         textAnchorX,
+                    labelFrameWidth:
+                        labelFrameWidth,
                     isRightSide:
-                        seed.isRightSide,
-                    labelVerticalOffset:
-                        labelVerticalOffset
+                        seed.isRightSide
                 )
             }
 
@@ -3563,11 +3643,11 @@ private struct CategoryCalloutLayout {
     let textAnchorX:
         CGFloat
 
+    let labelFrameWidth:
+        CGFloat
+
     let isRightSide:
         Bool
-
-    let labelVerticalOffset:
-        CGFloat
 }
 
 
