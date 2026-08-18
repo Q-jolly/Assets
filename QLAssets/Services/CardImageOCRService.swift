@@ -1,6 +1,7 @@
 import Foundation
 import Vision
 import UIKit
+import CoreImage
 
 
 struct BankCardOCRResult {
@@ -68,24 +69,283 @@ enum CardImageOCRService {
                 )
 
 
-        let ocrImageData =
-            extraction?
-                .imageData
-            ?? imageData
-
-
         guard
-            let image =
+            let originalImage =
                 UIImage(
                     data:
-                        ocrImageData
-                ),
-            let cgImage =
-                image.cgImage
+                        imageData
+                )
         else {
 
             throw RecognitionError
                 .invalidImage
+        }
+
+
+        var recognitionImages:
+            [UIImage] = []
+
+
+        // 第一优先：自动提取后的银行卡本体。
+        if let extractedData =
+            extraction?
+                .imageData,
+           let extractedImage =
+            UIImage(
+                data:
+                    extractedData
+            ) {
+
+            recognitionImages.append(
+                extractedImage
+            )
+        }
+
+
+        // 第二优先：原始截图。
+        // 有些 Apple Wallet / 银行 App 截图中的卡面文字，
+        // 经过透视矫正后反而不如原图容易识别。
+        recognitionImages.append(
+            originalImage
+        )
+
+
+        var allObservations:
+            [VNRecognizedTextObservation] = []
+
+        var allLines:
+            [String] = []
+
+
+        for image in recognitionImages {
+
+            let result =
+                recognizeGeneralText(
+                    in:
+                        image
+                )
+
+            allObservations.append(
+                contentsOf:
+                    result.observations
+            )
+
+            allLines.append(
+                contentsOf:
+                    result.lines
+            )
+
+
+            // 黑底白字、艺术字体卡面再跑一次高对比度版本。
+            if let contrastImage =
+                highContrastImage(
+                    from:
+                        image
+                ) {
+
+                let contrastResult =
+                    recognizeGeneralText(
+                        in:
+                            contrastImage
+                    )
+
+                allObservations.append(
+                    contentsOf:
+                        contrastResult
+                            .observations
+                )
+
+                allLines.append(
+                    contentsOf:
+                        contrastResult
+                            .lines
+                )
+            }
+        }
+
+
+        let uniqueLines =
+            Array(
+                Set(
+                    allLines
+                )
+            )
+
+
+        let fullText =
+            uniqueLines.joined(
+                separator:
+                    "\n"
+            )
+
+
+        let cardNumber =
+            findBestCardNumber(
+                in:
+                    uniqueLines
+            )
+
+
+        var lastFourDigits =
+            cardNumber.map {
+                String(
+                    $0.suffix(4)
+                )
+            }
+
+
+        if lastFourDigits ==
+            nil {
+
+            lastFourDigits =
+                findBestVisibleLastFour(
+                    in:
+                        allObservations
+                )
+        }
+
+
+        // 专门对每个候选图的中下部做数字 OCR。
+        if lastFourDigits ==
+            nil {
+
+            for image in
+                recognitionImages {
+
+                guard
+                    let cgImage =
+                        normalizedCGImage(
+                            from:
+                                image
+                        )
+                else {
+
+                    continue
+                }
+
+
+                if let detected =
+                    recognizeVisibleLastFourRegion(
+                        in:
+                            cgImage
+                    ) {
+
+                    lastFourDigits =
+                        detected
+
+                    break
+                }
+
+
+                if let contrastImage =
+                    highContrastImage(
+                        from:
+                            image
+                    ),
+                   let contrastCGImage =
+                    normalizedCGImage(
+                        from:
+                            contrastImage
+                    ),
+                   let detected =
+                    recognizeVisibleLastFourRegion(
+                        in:
+                            contrastCGImage
+                    ) {
+
+                    lastFourDigits =
+                        detected
+
+                    break
+                }
+            }
+        }
+
+
+        let bankName =
+            detectBankName(
+                in:
+                    fullText
+            )
+
+
+        let cardType =
+            detectCardType(
+                in:
+                    fullText
+            )
+
+
+        // 不再因为“通用 OCR 没扫到文字”直接整次失败。
+        // 只要银行卡本体成功提取，或者后四位/银行/类型任一识别成功，
+        // 都把结果返回给界面。
+        let hasUsefulResult =
+            extraction != nil ||
+            bankName != nil ||
+            cardType != nil ||
+            lastFourDigits != nil ||
+            !uniqueLines.isEmpty
+
+
+        guard hasUsefulResult
+        else {
+
+            throw RecognitionError
+                .visionFailed
+        }
+
+
+        return BankCardOCRResult(
+            bankName:
+                bankName,
+            lastFourDigits:
+                lastFourDigits,
+            cardType:
+                cardType,
+            recognizedText:
+                fullText,
+            extractedCardImageData:
+                extraction?
+                    .imageData,
+            usedRectangleDetection:
+                extraction?
+                    .usedRectangleDetection
+                ?? false
+        )
+    }
+
+
+    // MARK: - 多通道 OCR
+
+    private struct GeneralOCRResult {
+
+        let observations:
+            [VNRecognizedTextObservation]
+
+        let lines:
+            [String]
+    }
+
+
+    private static func recognizeGeneralText(
+        in image:
+            UIImage
+    ) -> GeneralOCRResult {
+
+        guard
+            let cgImage =
+                normalizedCGImage(
+                    from:
+                        image
+                )
+        else {
+
+            return GeneralOCRResult(
+                observations:
+                    [],
+                lines:
+                    []
+            )
         }
 
 
@@ -96,7 +356,7 @@ enum CardImageOCRService {
             .accurate
 
         request.usesLanguageCorrection =
-            false
+            true
 
         request.recognitionLanguages =
             [
@@ -105,7 +365,7 @@ enum CardImageOCRService {
             ]
 
         request.minimumTextHeight =
-            0.010
+            0.004
 
 
         let handler =
@@ -113,18 +373,27 @@ enum CardImageOCRService {
                 cgImage:
                     cgImage,
                 orientation:
-                    cgImageOrientation(
-                        for:
-                            image.imageOrientation
-                    ),
+                    .up,
                 options:
                     [:]
             )
 
 
-        try handler.perform(
-            [request]
-        )
+        do {
+
+            try handler.perform(
+                [request]
+            )
+
+        } catch {
+
+            return GeneralOCRResult(
+                observations:
+                    [],
+                lines:
+                    []
+            )
+        }
 
 
         let observations =
@@ -140,85 +409,154 @@ enum CardImageOCRService {
             }
 
 
-        guard !lines.isEmpty
-        else {
+        return GeneralOCRResult(
+            observations:
+                observations,
+            lines:
+                lines
+        )
+    }
 
-            throw RecognitionError
-                .visionFailed
+
+    private static func normalizedCGImage(
+        from image:
+            UIImage
+    ) -> CGImage? {
+
+        if image.imageOrientation ==
+            .up {
+
+            return image.cgImage
         }
 
 
-        let fullText =
-            lines.joined(
-                separator:
-                    "\n"
+        let renderer =
+            UIGraphicsImageRenderer(
+                size:
+                    image.size
             )
 
 
-        let cardNumber =
-            findBestCardNumber(
-                in:
-                    lines
-            )
+        let normalized =
+            renderer.image {
+                _ in
 
-
-        var lastFourDigits =
-            cardNumber.map {
-                String(
-                    $0.suffix(4)
+                image.draw(
+                    in:
+                        CGRect(
+                            origin:
+                                .zero,
+                            size:
+                                image.size
+                        )
                 )
             }
 
 
-        // Apple Wallet / 银行 App 截图经常只展示：
-        // •••• 6098
-        //
-        // 这种图片本身没有完整 13~19 位卡号，
-        // 所以完整 PAN 识别失败后，需要单独识别可见后四位。
-        if lastFourDigits == nil {
+        return normalized.cgImage
+    }
 
-            lastFourDigits =
-                findBestVisibleLastFour(
-                    in:
-                        observations
+
+    private static func highContrastImage(
+        from image:
+            UIImage
+    ) -> UIImage? {
+
+        guard
+            let cgImage =
+                normalizedCGImage(
+                    from:
+                        image
                 )
+        else {
+
+            return nil
         }
 
 
-        // 再做一次针对银行卡下半部的低阈值 OCR。
-        // 对小字号、白色数字、复杂卡面更友好。
-        if lastFourDigits == nil {
+        let input =
+            CIImage(
+                cgImage:
+                    cgImage
+            )
 
-            lastFourDigits =
-                recognizeVisibleLastFourRegion(
-                    in:
-                        cgImage
+
+        guard
+            let filter =
+                CIFilter(
+                    name:
+                        "CIColorControls"
                 )
+        else {
+
+            return nil
         }
 
 
-        return BankCardOCRResult(
-            bankName:
-                detectBankName(
-                    in:
-                        fullText
-                ),
-            lastFourDigits:
-                lastFourDigits,
-            cardType:
-                detectCardType(
-                    in:
-                        fullText
-                ),
-            recognizedText:
-                fullText,
-            extractedCardImageData:
-                extraction?
-                    .imageData,
-            usedRectangleDetection:
-                extraction?
-                    .usedRectangleDetection
-                ?? false
+        filter.setValue(
+            input,
+            forKey:
+                kCIInputImageKey
+        )
+
+        filter.setValue(
+            0.0,
+            forKey:
+                kCIInputSaturationKey
+        )
+
+        filter.setValue(
+            1.65,
+            forKey:
+                kCIInputContrastKey
+        )
+
+        filter.setValue(
+            0.04,
+            forKey:
+                kCIInputBrightnessKey
+        )
+
+
+        guard
+            let output =
+                filter.outputImage
+        else {
+
+            return nil
+        }
+
+
+        let context =
+            CIContext(
+                options:
+                    [
+                        .useSoftwareRenderer:
+                            false
+                    ]
+            )
+
+
+        guard
+            let outputCGImage =
+                context.createCGImage(
+                    output,
+                    from:
+                        output.extent
+                )
+        else {
+
+            return nil
+        }
+
+
+        return UIImage(
+            cgImage:
+                outputCGImage,
+            scale:
+                1,
+            orientation:
+                .up
         )
     }
 
@@ -447,7 +785,10 @@ enum CardImageOCRService {
         let creditKeywords =
             [
                 "信用卡",
+                "国际信用卡",
+                "全币种国际信用卡",
                 "贷记卡",
+                "CREDIT CARD",
                 "CREDIT"
             ]
 
@@ -696,7 +1037,7 @@ enum CardImageOCRService {
             ]
 
         request.minimumTextHeight =
-            0.004
+            0.0025
 
 
         // 银行卡卡号通常在中下部。
@@ -1151,10 +1492,19 @@ enum CardImageOCRService {
             .count
 
 
-        // 只有这一行已经包含较多阿拉伯数字时，
-        // 才把 OCR 常见的 O/I/S/B 字母纠正为数字。
-        // 中文字符永远不会被当作银行卡号数字。
-        guard asciiDigitCount >= 4
+        // 普通文本不做字母→数字纠错，避免误伤。
+        // 但银行卡掩码行（•••• 581S）经常只有 3 个数字，
+        // 这时也允许把 S/O/I/B 等常见 OCR 错字纠正回来。
+        let mayBeMaskedCardNumber =
+            containsCardMask(
+                text
+            ) &&
+            asciiDigitCount >= 2
+
+
+        guard
+            asciiDigitCount >= 4 ||
+            mayBeMaskedCardNumber
         else {
 
             return text
