@@ -3259,12 +3259,12 @@ private struct CategoryDonutBreakdownView: View {
         let desiredLeftLineEndX =
             center.x -
             outerRadius -
-            54
+            62
 
         let desiredRightLineEndX =
             center.x +
             outerRadius +
-            54
+            62
 
         let leftLineEndX =
             max(
@@ -3306,30 +3306,54 @@ private struct CategoryDonutBreakdownView: View {
 
                 if seed.isRightSide {
 
-                    let preferred =
-                        seed.start.x + 28
+                    let available =
+                        max(
+                            endX -
+                            seed.start.x,
+                            18
+                        )
 
-                    let maxBend =
-                        endX - 42
+                    let diagonalLength =
+                        min(
+                            24,
+                            max(
+                                10,
+                                available *
+                                0.42
+                            )
+                        )
 
                     bendX =
                         min(
-                            preferred,
-                            maxBend
+                            seed.start.x +
+                            diagonalLength,
+                            endX - 8
                         )
 
                 } else {
 
-                    let preferred =
-                        seed.start.x - 28
+                    let available =
+                        max(
+                            seed.start.x -
+                            endX,
+                            18
+                        )
 
-                    let minBend =
-                        endX + 42
+                    let diagonalLength =
+                        min(
+                            24,
+                            max(
+                                10,
+                                available *
+                                0.42
+                            )
+                        )
 
                     bendX =
                         max(
-                            preferred,
-                            minBend
+                            seed.start.x -
+                            diagonalLength,
+                            endX + 8
                         )
                 }
 
