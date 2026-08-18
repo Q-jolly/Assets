@@ -94,11 +94,19 @@ enum AppTime {
 @main
 struct QLAssetsApp: App {
 
+    @StateObject
+    private var appLock =
+        AppLockManager()
+
+
     var body: some Scene {
 
         WindowGroup {
 
-            ContentView()
+            AppLockContainerView()
+                .environmentObject(
+                    appLock
+                )
                 .environment(
                     \.timeZone,
                     AppTime.timeZone

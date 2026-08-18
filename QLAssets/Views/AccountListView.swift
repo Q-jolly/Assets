@@ -93,10 +93,23 @@ struct AccountListView: View {
         )
         .toolbar {
 
-            ToolbarItem(
+            ToolbarItemGroup(
                 placement:
                     .topBarTrailing
             ) {
+
+                NavigationLink {
+
+                    SecuritySettingsView()
+
+                } label: {
+
+                    Image(
+                        systemName:
+                            "gearshape"
+                    )
+                }
+
 
                 Button {
 

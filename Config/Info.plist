@@ -35,6 +35,9 @@
     <key>CFBundleVersion</key>
     <string>$(CURRENT_PROJECT_VERSION)</string>
 
+    <key>NSFaceIDUsageDescription</key>
+    <string>用于解锁 QL Assets，保护你的资产、账单和银行卡信息。</string>
+
     <key>LSRequiresIPhoneOS</key>
     <true/>
 
