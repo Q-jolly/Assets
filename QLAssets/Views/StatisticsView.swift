@@ -3155,7 +3155,26 @@ private struct CategoryDonutBreakdownView: View {
             CGSize
     ) -> [String: CategoryCalloutLayout] {
 
-        let rawLayouts =
+        struct RawLayoutSeed {
+
+            let id:
+                String
+
+            let start:
+                CGPoint
+
+            let proposedY:
+                CGFloat
+
+            let labelWidth:
+                CGFloat
+
+            let isRightSide:
+                Bool
+        }
+
+
+        let rawSeeds =
             points.map { point in
 
                 let radians =
@@ -3183,14 +3202,6 @@ private struct CategoryDonutBreakdownView: View {
                             (outerRadius + 2)
                     )
 
-                let bendX =
-                    center.x +
-                    (
-                        isRightSide
-                        ? (outerRadius + 18)
-                        : -(outerRadius + 18)
-                    )
-
                 let proposedY =
                     center.y +
                     sin(
@@ -3198,107 +3209,181 @@ private struct CategoryDonutBreakdownView: View {
                     ) *
                     calloutRadius
 
-                let estimatedLabelWidth =
+                let labelWidth =
                     estimatedCalloutLabelWidth(
                         text:
                             "\(point.category) \(point.percentageText)"
                     )
 
-                let halfWidth =
-                    estimatedLabelWidth / 2
-
-                let labelGap:
-                    CGFloat = 8
-
-                // 一折线：从圆环先斜着连到拐点，
-                // 再水平连到线末端；文字放在线末端外侧上方。
-                let preferredEndX =
-                    center.x +
-                    (
-                        isRightSide
-                        ? (
-                            outerRadius +
-                            104 +
-                            horizontalExtension
-                        )
-                        : -(
-                            outerRadius +
-                            104 +
-                            horizontalExtension
-                        )
-                    )
-
-                let minEndX =
-                    isRightSide
-                    ? (bendX + 28)
-                    : 8
-
-                let maxEndX =
-                    isRightSide
-                    ? (bounds.width - halfWidth - labelGap - 8)
-                    : (bendX - 28)
-
-                let endX =
-                    min(
-                        max(
-                            preferredEndX,
-                            minEndX
-                        ),
-                        maxEndX
-                    )
-
-                let preferredTextAnchorX =
-                    endX +
-                    (
-                        isRightSide
-                        ? (
-                            halfWidth +
-                            labelGap
-                        )
-                        : -(
-                            halfWidth +
-                            labelGap
-                        )
-                    )
-
-                let textAnchorX =
-                    min(
-                        max(
-                            preferredTextAnchorX,
-                            halfWidth + 8
-                        ),
-                        bounds.width -
-                        halfWidth -
-                        8
-                    )
-
-
-                return CategoryCalloutLayout(
+                return RawLayoutSeed(
                     id:
                         point.id,
                     start:
                         start,
+                    proposedY:
+                        proposedY,
+                    labelWidth:
+                        labelWidth,
+                    isRightSide:
+                        isRightSide
+                )
+            }
+
+
+        let labelGap:
+            CGFloat = 8
+
+        let sidePadding:
+            CGFloat = 12
+
+        let maxLeftWidth =
+            rawSeeds
+                .filter {
+                    !$0.isRightSide
+                }
+                .map {
+                    $0.labelWidth
+                }
+                .max() ?? 0
+
+        let maxRightWidth =
+            rawSeeds
+                .filter {
+                    $0.isRightSide
+                }
+                .map {
+                    $0.labelWidth
+                }
+                .max() ?? 0
+
+        let leftLabelRightX =
+            max(
+                maxLeftWidth +
+                sidePadding,
+                center.x -
+                outerRadius +
+                8
+            )
+
+        let rightLabelLeftX =
+            min(
+                bounds.width -
+                maxRightWidth -
+                sidePadding,
+                center.x +
+                outerRadius -
+                8
+            )
+
+        let leftLineEndX =
+            leftLabelRightX +
+            labelGap
+
+        let rightLineEndX =
+            rightLabelLeftX -
+            labelGap
+
+        let rawLayouts =
+            rawSeeds.map { seed in
+
+                let endX =
+                    seed.isRightSide
+                    ? rightLineEndX
+                    : leftLineEndX
+
+                let textAnchorX =
+                    seed.isRightSide
+                    ? (
+                        rightLabelLeftX +
+                        seed.labelWidth / 2
+                    )
+                    : (
+                        leftLabelRightX -
+                        seed.labelWidth / 2
+                    )
+
+                let bendX: CGFloat
+
+                if seed.isRightSide {
+
+                    let lowerBound =
+                        seed.start.x + 10
+
+                    let upperBound =
+                        endX - 14
+
+                    let preferred =
+                        seed.start.x + 26
+
+                    if lowerBound < upperBound {
+
+                        bendX = min(
+                            max(
+                                preferred,
+                                lowerBound
+                            ),
+                            upperBound
+                        )
+
+                    } else {
+
+                        bendX =
+                            (seed.start.x + endX) / 2
+                    }
+
+                } else {
+
+                    let lowerBound =
+                        endX + 14
+
+                    let upperBound =
+                        seed.start.x - 10
+
+                    let preferred =
+                        seed.start.x - 26
+
+                    if lowerBound < upperBound {
+
+                        bendX = min(
+                            max(
+                                preferred,
+                                lowerBound
+                            ),
+                            upperBound
+                        )
+
+                    } else {
+
+                        bendX =
+                            (seed.start.x + endX) / 2
+                    }
+                }
+
+                return CategoryCalloutLayout(
+                    id:
+                        seed.id,
+                    start:
+                        seed.start,
                     bend:
                         CGPoint(
                             x:
                                 bendX,
                             y:
-                                proposedY
+                                seed.proposedY
                         ),
                     end:
                         CGPoint(
                             x:
                                 endX,
                             y:
-                                proposedY
+                                seed.proposedY
                         ),
                     textAnchorX:
                         textAnchorX,
                     isRightSide:
-                        isRightSide
+                        seed.isRightSide
                 )
             }
-
 
         let topLimit =
             max(
