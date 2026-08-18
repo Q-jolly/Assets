@@ -170,8 +170,7 @@ enum TransactionImportService {
                 .utf16,
                 .utf16LittleEndian,
                 .utf16BigEndian,
-                .unicode,
-                .gb_18030_2000
+                .unicode
             ]
 
 
