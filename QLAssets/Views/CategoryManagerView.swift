@@ -169,9 +169,24 @@ struct CategoryManagerView:
                                 .tertiary
                             )
                         }
+                        .frame(
+                            maxWidth:
+                                .infinity,
+                            alignment:
+                                .leading
+                        )
+                        .contentShape(
+                            Rectangle()
+                        )
                     }
                     .buttonStyle(
                         .plain
+                    )
+                    .contentShape(
+                        Rectangle()
+                    )
+                    .accessibilityLabel(
+                        "编辑分类 \(item.name)"
                     )
                 }
                 .onDelete(

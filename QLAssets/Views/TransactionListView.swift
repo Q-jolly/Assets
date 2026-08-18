@@ -1,6 +1,7 @@
 import SwiftUI
 import SwiftData
 import Foundation
+import UniformTypeIdentifiers
 
 
 struct TransactionListView:
@@ -110,6 +111,30 @@ struct TransactionListView:
     private var dateFilter:
         DateFilter =
             .all
+
+    @State
+    private var exportDocument =
+        TransactionCSVDocument()
+
+    @State
+    private var showExporter =
+        false
+
+    @State
+    private var exportFilename =
+        "QLAssets_账单"
+
+    @State
+    private var exportMessageTitle =
+        ""
+
+    @State
+    private var exportMessageText =
+        ""
+
+    @State
+    private var showExportMessage =
+        false
 
 
     private var availableCategories:
@@ -466,6 +491,62 @@ struct TransactionListView:
                     .topBarTrailing
             ) {
 
+                Menu {
+
+                    Button {
+
+                        prepareCSVExport(
+                            transactions:
+                                filteredTransactions,
+                            filtered:
+                                true
+                        )
+
+                    } label: {
+
+                        Label(
+                            "导出当前结果",
+                            systemImage:
+                                "line.3.horizontal.decrease"
+                        )
+                    }
+                    .disabled(
+                        filteredTransactions
+                            .isEmpty
+                    )
+
+
+                    Button {
+
+                        prepareCSVExport(
+                            transactions:
+                                transactions,
+                            filtered:
+                                false
+                        )
+
+                    } label: {
+
+                        Label(
+                            "导出全部账单",
+                            systemImage:
+                                "tray.full"
+                        )
+                    }
+                    .disabled(
+                        transactions
+                            .isEmpty
+                    )
+
+                } label: {
+
+                    Image(
+                        systemName:
+                            "square.and.arrow.up"
+                    )
+                }
+
+
                 NavigationLink {
 
                     CategoryManagerView()
@@ -760,6 +841,118 @@ struct TransactionListView:
                 }
             }
         }
+        .fileExporter(
+            isPresented:
+                $showExporter,
+            document:
+                exportDocument,
+            contentType:
+                TransactionCSVDocument
+                    .readableContentTypes
+                    .first
+                ?? .plainText,
+            defaultFilename:
+                exportFilename
+        ) { result in
+
+            switch result {
+
+            case .success:
+
+                exportMessageTitle =
+                    "导出完成"
+
+                exportMessageText =
+                    "CSV 文件已导出，可用 Excel、Numbers 等应用打开。"
+
+            case .failure(
+                let error
+            ):
+
+                exportMessageTitle =
+                    "导出失败"
+
+                exportMessageText =
+                    error
+                        .localizedDescription
+            }
+
+
+            showExportMessage =
+                true
+        }
+        .alert(
+            exportMessageTitle,
+            isPresented:
+                $showExportMessage
+        ) {
+
+            Button(
+                "好的"
+            ) {}
+
+        } message: {
+
+            Text(
+                exportMessageText
+            )
+        }
+    }
+
+
+    private func prepareCSVExport(
+        transactions records:
+            [TransactionRecord],
+        filtered:
+            Bool
+    ) {
+
+        let data =
+            TransactionCSVExportService
+                .makeCSV(
+                    transactions:
+                        records,
+                    accounts:
+                        accounts,
+                    cards:
+                        cards
+                )
+
+
+        exportDocument =
+            TransactionCSVDocument(
+                data:
+                    data
+            )
+
+
+        let formatter =
+            DateFormatter()
+
+        formatter.calendar =
+            AppTime.calendar
+
+        formatter.timeZone =
+            AppTime.timeZone
+
+        formatter.locale =
+            Locale(
+                identifier:
+                    "zh_CN"
+            )
+
+        formatter.dateFormat =
+            "yyyyMMdd_HHmm"
+
+
+        exportFilename =
+            filtered
+            ? "QLAssets_筛选账单_\(formatter.string(from: Date()))"
+            : "QLAssets_全部账单_\(formatter.string(from: Date()))"
+
+
+        showExporter =
+            true
     }
 
 
