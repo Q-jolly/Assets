@@ -2655,6 +2655,7 @@ private struct CategoryDonutBreakdownView: View {
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
             // 给左右折线和文字留下空间。
+            // 引导线采用“一次折线”样式，视觉上更自然。
             let outerRadius =
                 min(
                     width *
@@ -3186,8 +3187,8 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? calloutRadius
-                        : -calloutRadius
+                        ? (outerRadius + 22)
+                        : -(outerRadius + 22)
                     )
 
                 let proposedY =
@@ -3198,11 +3199,11 @@ private struct CategoryDonutBreakdownView: View {
                     calloutRadius
 
                 let endX =
-                    bendX +
+                    center.x +
                     (
                         isRightSide
-                        ? horizontalExtension
-                        : -horizontalExtension
+                        ? (outerRadius + 52)
+                        : -(outerRadius + 52)
                     )
 
                 // 标签中心距离末端约 39pt，
@@ -3236,7 +3237,7 @@ private struct CategoryDonutBreakdownView: View {
                             x:
                                 bendX,
                             y:
-                                proposedY
+                                start.y
                         ),
                     end:
                         CGPoint(
@@ -3364,9 +3365,6 @@ private struct CategoryDonutBreakdownView: View {
                     minimumGap
                 )
 
-            layout.bend.y =
-                newY
-
             layout.end.y =
                 newY
 
@@ -3434,9 +3432,6 @@ private struct CategoryDonutBreakdownView: View {
                         layout.end.y,
                         topLimit
                     )
-
-                layout.bend.y =
-                    layout.end.y
 
                 adjusted[
                     index
