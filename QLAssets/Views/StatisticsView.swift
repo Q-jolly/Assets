@@ -3198,14 +3198,6 @@ private struct CategoryDonutBreakdownView: View {
                     ) *
                     calloutRadius
 
-                let endX =
-                    center.x +
-                    (
-                        isRightSide
-                        ? (outerRadius + 64 + horizontalExtension)
-                        : -(outerRadius + 64 + horizontalExtension)
-                    )
-
                 let estimatedLabelWidth =
                     estimatedCalloutLabelWidth(
                         text:
@@ -3213,36 +3205,52 @@ private struct CategoryDonutBreakdownView: View {
                     )
 
                 let labelGap:
-                    CGFloat = 10
-
-                // 让文字气泡出现在折线末端之外。
-                // 最终文字位置会再上移，不压在线段上。
-                let rawTextX =
-                    endX +
-                    (
-                        isRightSide
-                        ? (
-                            labelGap +
-                            estimatedLabelWidth / 2
-                        )
-                        : -(
-                            labelGap +
-                            estimatedLabelWidth / 2
-                        )
-                    )
+                    CGFloat = 8
 
                 let halfWidth =
                     estimatedLabelWidth / 2
 
+                // 让文字出现在引导线“末端的上方”，
+                // 不是压在横线中段。
+                let preferredTextAnchorX =
+                    center.x +
+                    (
+                        isRightSide
+                        ? (
+                            outerRadius +
+                            92 +
+                            halfWidth
+                        )
+                        : -(
+                            outerRadius +
+                            92 +
+                            halfWidth
+                        )
+                    )
+
                 let textAnchorX =
                     min(
                         max(
-                            rawTextX,
+                            preferredTextAnchorX,
                             halfWidth + 8
                         ),
                         bounds.width -
                         halfWidth -
                         8
+                    )
+
+                let endX =
+                    textAnchorX +
+                    (
+                        isRightSide
+                        ? -(
+                            halfWidth +
+                            labelGap
+                        )
+                        : (
+                            halfWidth +
+                            labelGap
+                        )
                     )
 
 
