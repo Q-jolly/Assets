@@ -2672,7 +2672,7 @@ private struct CategoryDonutBreakdownView: View {
                 14
 
             let horizontalExtension:
-                CGFloat = 20
+                CGFloat = 16
 
             let labelLayouts =
                 resolvedLabelLayouts(
@@ -3186,8 +3186,8 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? (outerRadius + 20)
-                        : -(outerRadius + 20)
+                        ? (outerRadius + 26)
+                        : -(outerRadius + 26)
                     )
 
                 let proposedY =
@@ -3201,8 +3201,8 @@ private struct CategoryDonutBreakdownView: View {
                     center.x +
                     (
                         isRightSide
-                        ? (outerRadius + 52 + horizontalExtension)
-                        : -(outerRadius + 52 + horizontalExtension)
+                        ? (outerRadius + 64 + horizontalExtension)
+                        : -(outerRadius + 64 + horizontalExtension)
                     )
 
                 // 标签中心距离末端约 42pt，
@@ -3304,19 +3304,12 @@ private struct CategoryDonutBreakdownView: View {
             )
 
 
-        let normalizedLayouts =
-            (
-                leftAdjusted +
-                rightAdjusted
-            ).map {
-                normalizeCalloutLayout(
-                    $0
-                )
-            }
-
         return Dictionary(
             uniqueKeysWithValues:
-                normalizedLayouts
+                (
+                    leftAdjusted +
+                    rightAdjusted
+                )
                 .map {
                     (
                         $0.id,
@@ -3324,27 +3317,6 @@ private struct CategoryDonutBreakdownView: View {
                     )
                 }
         )
-    }
-
-
-    private func normalizeCalloutLayout(
-        _ layout:
-            CategoryCalloutLayout
-    ) -> CategoryCalloutLayout {
-
-        var adjusted =
-            layout
-
-        let deltaY =
-            adjusted.end.y -
-            adjusted.start.y
-
-        adjusted.bend.y =
-            adjusted.start.y +
-            deltaY *
-            0.42
-
-        return adjusted
     }
 
 
@@ -3391,6 +3363,9 @@ private struct CategoryDonutBreakdownView: View {
                     previousY +
                     minimumGap
                 )
+
+            layout.bend.y =
+                newY
 
             layout.end.y =
                 newY
@@ -3459,6 +3434,9 @@ private struct CategoryDonutBreakdownView: View {
                         layout.end.y,
                         topLimit
                     )
+
+                layout.bend.y =
+                    layout.end.y
 
                 adjusted[
                     index
