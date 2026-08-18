@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import Compression
 
 
 struct TransactionImportTable {
@@ -12,6 +13,19 @@ struct TransactionImportTable {
 
     let delimiter:
         Character
+}
+
+
+struct NumbersZIPImportSelection {
+
+    let text:
+        String
+
+    let entryName:
+        String
+
+    let ignoredCSVCount:
+        Int
 }
 
 
@@ -114,6 +128,10 @@ enum TransactionImportError:
 
     case cannotReadClipboard
 
+    case invalidZIP
+
+    case noTransactionCSVInZIP
+
 
     var errorDescription:
         String? {
@@ -149,6 +167,16 @@ enum TransactionImportError:
 
             return
                 "剪贴板中没有可识别的表格文字。"
+
+        case .invalidZIP:
+
+            return
+                "这个 ZIP 文件无法解析，请确认它是 Numbers 导出的 CSV 压缩包。"
+
+        case .noTransactionCSVInZIP:
+
+            return
+                "ZIP 中没有找到可识别的交易明细 CSV。"
         }
     }
 }
@@ -198,6 +226,772 @@ enum TransactionImportService {
 
         throw TransactionImportError
             .cannotDecode
+    }
+
+
+    static func extractNumbersZIP(
+        data:
+            Data
+    ) throws
+        -> NumbersZIPImportSelection {
+
+        let entries =
+            try readZIPEntries(
+                data:
+                    data
+            )
+            .filter {
+                $0.name
+                    .lowercased()
+                    .hasSuffix(
+                        ".csv"
+                    )
+            }
+
+
+        guard !entries.isEmpty
+        else {
+
+            throw TransactionImportError
+                .noTransactionCSVInZIP
+        }
+
+
+        var candidates:
+            [(
+                score:
+                    Int,
+                rowCount:
+                    Int,
+                name:
+                    String,
+                text:
+                    String
+            )] = []
+
+
+        for entry in entries {
+
+            guard
+                let entryData =
+                    extractZIPEntry(
+                        entry,
+                        archiveData:
+                            data
+                    ),
+                let csvText =
+                    try? decodeText(
+                        data:
+                            entryData
+                    ),
+                let table =
+                    try? parseTable(
+                        text:
+                            csvText
+                    )
+            else {
+
+                continue
+            }
+
+
+            let mapping =
+                autoMapping(
+                    headers:
+                        table.headers
+                )
+
+
+            var score =
+                0
+
+
+            if mapping.dateColumn !=
+                nil {
+
+                score +=
+                    100
+            }
+
+
+            if mapping.amountColumn !=
+                nil {
+
+                score +=
+                    80
+            }
+
+
+            if mapping.typeColumn !=
+                nil {
+
+                score +=
+                    50
+            }
+
+
+            if mapping.categoryColumn !=
+                nil {
+
+                score +=
+                    30
+            }
+
+
+            if mapping.descriptionColumn !=
+                nil {
+
+                score +=
+                    15
+            }
+
+
+            let normalizedName =
+                entry.name
+                    .lowercased()
+
+
+            if normalizedName.contains(
+                "交易"
+            ) ||
+               normalizedName.contains(
+                "transaction"
+            ) {
+
+                score +=
+                    40
+            }
+
+
+            // 明细表通常远多于“月支出 / 月收入”概览行。
+            score +=
+                min(
+                    table.rows.count,
+                    50
+                )
+
+
+            candidates.append(
+                (
+                    score:
+                        score,
+                    rowCount:
+                        table.rows.count,
+                    name:
+                        entry.name,
+                    text:
+                        csvText
+                )
+            )
+        }
+
+
+        let sortedCandidates =
+            candidates.sorted {
+                lhs,
+                rhs in
+
+                if lhs.score !=
+                    rhs.score {
+
+                    return
+                        lhs.score >
+                        rhs.score
+                }
+
+                return
+                    lhs.rowCount >
+                    rhs.rowCount
+            }
+
+
+        guard
+            let best =
+                sortedCandidates.first,
+            best.score >=
+                180
+        else {
+
+            throw TransactionImportError
+                .noTransactionCSVInZIP
+        }
+
+
+        return NumbersZIPImportSelection(
+            text:
+                best.text,
+            entryName:
+                best.name,
+            ignoredCSVCount:
+                max(
+                    0,
+                    entries.count -
+                    1
+                )
+        )
+    }
+
+
+    // MARK: - ZIP 读取
+
+    private struct ZIPEntry {
+
+        let name:
+            String
+
+        let compressionMethod:
+            UInt16
+
+        let compressedSize:
+            Int
+
+        let uncompressedSize:
+            Int
+
+        let localHeaderOffset:
+            Int
+    }
+
+
+    private static func readZIPEntries(
+        data:
+            Data
+    ) throws
+        -> [ZIPEntry] {
+
+        // End of central directory 至少 22 字节，
+        // ZIP comment 最长 65535 字节。
+        guard data.count >=
+                22
+        else {
+
+            throw TransactionImportError
+                .invalidZIP
+        }
+
+
+        let signature:
+            UInt32 =
+                0x06054B50
+
+
+        let lowerBound =
+            max(
+                0,
+                data.count -
+                65_557
+            )
+
+
+        var index =
+            data.count -
+            22
+
+        var endOffset:
+            Int?
+
+
+        while index >=
+                lowerBound {
+
+            if readUInt32(
+                data,
+                at:
+                    index
+            ) ==
+                signature {
+
+                endOffset =
+                    index
+
+                break
+            }
+
+
+            index -=
+                1
+        }
+
+
+        guard
+            let endOffset,
+            let entryCount =
+                readUInt16(
+                    data,
+                    at:
+                        endOffset +
+                        10
+                ),
+            let centralDirectoryOffset =
+                readUInt32(
+                    data,
+                    at:
+                        endOffset +
+                        16
+                )
+        else {
+
+            throw TransactionImportError
+                .invalidZIP
+        }
+
+
+        var entries:
+            [ZIPEntry] = []
+
+        var cursor =
+            Int(
+                centralDirectoryOffset
+            )
+
+
+        for _ in
+            0..<Int(
+                entryCount
+            ) {
+
+            guard
+                readUInt32(
+                    data,
+                    at:
+                        cursor
+                ) ==
+                    0x02014B50,
+                let flags =
+                    readUInt16(
+                        data,
+                        at:
+                            cursor +
+                            8
+                    ),
+                let method =
+                    readUInt16(
+                        data,
+                        at:
+                            cursor +
+                            10
+                    ),
+                let compressedSize =
+                    readUInt32(
+                        data,
+                        at:
+                            cursor +
+                            20
+                    ),
+                let uncompressedSize =
+                    readUInt32(
+                        data,
+                        at:
+                            cursor +
+                            24
+                    ),
+                let nameLength =
+                    readUInt16(
+                        data,
+                        at:
+                            cursor +
+                            28
+                    ),
+                let extraLength =
+                    readUInt16(
+                        data,
+                        at:
+                            cursor +
+                            30
+                    ),
+                let commentLength =
+                    readUInt16(
+                        data,
+                        at:
+                            cursor +
+                            32
+                    ),
+                let localOffset =
+                    readUInt32(
+                        data,
+                        at:
+                            cursor +
+                            42
+                    )
+            else {
+
+                throw TransactionImportError
+                    .invalidZIP
+            }
+
+
+            // encrypted ZIP 不处理
+            guard
+                flags &
+                    0x0001 ==
+                    0
+            else {
+
+                throw TransactionImportError
+                    .invalidZIP
+            }
+
+
+            let nameStart =
+                cursor +
+                46
+
+            let nameEnd =
+                nameStart +
+                Int(
+                    nameLength
+                )
+
+
+            guard
+                nameStart >=
+                    0,
+                nameEnd <=
+                    data.count
+            else {
+
+                throw TransactionImportError
+                    .invalidZIP
+            }
+
+
+            let nameData =
+                data.subdata(
+                    in:
+                        nameStart..<nameEnd
+                )
+
+
+            // Numbers 导出的 ZIP 可能没有设置 UTF-8 flag，
+            // 但文件名字节本身仍然是 UTF-8；优先按 UTF-8 解码。
+            let name =
+                String(
+                    data:
+                        nameData,
+                    encoding:
+                        .utf8
+                )
+                ?? "CSV-\(entries.count + 1).csv"
+
+
+            entries.append(
+                ZIPEntry(
+                    name:
+                        name,
+                    compressionMethod:
+                        method,
+                    compressedSize:
+                        Int(
+                            compressedSize
+                        ),
+                    uncompressedSize:
+                        Int(
+                            uncompressedSize
+                        ),
+                    localHeaderOffset:
+                        Int(
+                            localOffset
+                        )
+                )
+            )
+
+
+            cursor +=
+                46 +
+                Int(
+                    nameLength
+                ) +
+                Int(
+                    extraLength
+                ) +
+                Int(
+                    commentLength
+                )
+        }
+
+
+        return entries
+    }
+
+
+    private static func extractZIPEntry(
+        _ entry:
+            ZIPEntry,
+        archiveData:
+            Data
+    ) -> Data? {
+
+        let offset =
+            entry.localHeaderOffset
+
+
+        guard
+            readUInt32(
+                archiveData,
+                at:
+                    offset
+            ) ==
+                0x04034B50,
+            let nameLength =
+                readUInt16(
+                    archiveData,
+                    at:
+                        offset +
+                        26
+                ),
+            let extraLength =
+                readUInt16(
+                    archiveData,
+                    at:
+                        offset +
+                        28
+                )
+        else {
+
+            return nil
+        }
+
+
+        let dataStart =
+            offset +
+            30 +
+            Int(
+                nameLength
+            ) +
+            Int(
+                extraLength
+            )
+
+        let dataEnd =
+            dataStart +
+            entry.compressedSize
+
+
+        guard
+            dataStart >=
+                0,
+            dataEnd <=
+                archiveData.count
+        else {
+
+            return nil
+        }
+
+
+        let compressed =
+            archiveData.subdata(
+                in:
+                    dataStart..<dataEnd
+            )
+
+
+        switch entry
+            .compressionMethod {
+
+        case 0:
+
+            return compressed
+
+        case 8:
+
+            return inflateRawDeflate(
+                compressed,
+                expectedSize:
+                    entry
+                        .uncompressedSize
+            )
+
+        default:
+
+            return nil
+        }
+    }
+
+
+    private static func inflateRawDeflate(
+        _ compressed:
+            Data,
+        expectedSize:
+            Int
+    ) -> Data? {
+
+        guard
+            expectedSize >=
+                0
+        else {
+
+            return nil
+        }
+
+
+        if expectedSize ==
+            0 {
+
+            return Data()
+        }
+
+
+        var output =
+            Data(
+                count:
+                    max(
+                        expectedSize,
+                        1
+                    )
+            )
+
+
+        let outputCapacity =
+            output.count
+
+
+        let decodedSize:
+            Int =
+                output
+                    .withUnsafeMutableBytes {
+                        destinationBuffer in
+
+                        compressed
+                            .withUnsafeBytes {
+                                sourceBuffer in
+
+                                guard
+                                    let destination =
+                                        destinationBuffer
+                                            .bindMemory(
+                                                to:
+                                                    UInt8.self
+                                            )
+                                            .baseAddress,
+                                    let source =
+                                        sourceBuffer
+                                            .bindMemory(
+                                                to:
+                                                    UInt8.self
+                                            )
+                                            .baseAddress
+                                else {
+
+                                    return 0
+                                }
+
+
+                                return compression_decode_buffer(
+                                    destination,
+                                    outputCapacity,
+                                    source,
+                                    compressed.count,
+                                    nil,
+                                    COMPRESSION_ZLIB
+                                )
+                            }
+                    }
+
+
+        guard decodedSize >
+                0
+        else {
+
+            return nil
+        }
+
+
+        output.count =
+            decodedSize
+
+        return output
+    }
+
+
+    private static func readUInt16(
+        _ data:
+            Data,
+        at offset:
+            Int
+    ) -> UInt16? {
+
+        guard
+            offset >=
+                0,
+            offset +
+                2 <=
+                data.count
+        else {
+
+            return nil
+        }
+
+
+        return
+            UInt16(
+                data[
+                    offset
+                ]
+            ) |
+            (
+                UInt16(
+                    data[
+                        offset +
+                        1
+                    ]
+                )
+                << 8
+            )
+    }
+
+
+    private static func readUInt32(
+        _ data:
+            Data,
+        at offset:
+            Int
+    ) -> UInt32? {
+
+        guard
+            offset >=
+                0,
+            offset +
+                4 <=
+                data.count
+        else {
+
+            return nil
+        }
+
+
+        return
+            UInt32(
+                data[
+                    offset
+                ]
+            ) |
+            (
+                UInt32(
+                    data[
+                        offset +
+                        1
+                    ]
+                )
+                << 8
+            ) |
+            (
+                UInt32(
+                    data[
+                        offset +
+                        2
+                    ]
+                )
+                << 16
+            ) |
+            (
+                UInt32(
+                    data[
+                        offset +
+                        3
+                    ]
+                )
+                << 24
+            )
     }
 
 
@@ -392,6 +1186,8 @@ enum TransactionImportService {
                     "分类",
                     "类别",
                     "收支分类",
+                    "账目明细",
+                    "明细",
                     "category",
                     "categories"
                 ]
@@ -607,7 +1403,7 @@ enum TransactionImportService {
                         )
                     }
                     .map(
-                        cleanCell
+                        cleanImportedCategory
                     )
                     .flatMap {
                         $0.isEmpty
@@ -1764,6 +2560,61 @@ enum TransactionImportService {
                 in:
                     .whitespacesAndNewlines
             )
+    }
+
+
+    private static func cleanImportedCategory(
+        _ value:
+            String
+    ) -> String {
+
+        let cleaned =
+            cleanCell(
+                value
+            )
+
+
+        guard !cleaned.isEmpty
+        else {
+
+            return cleaned
+        }
+
+
+        let allowedStart =
+            CharacterSet
+                .letters
+                .union(
+                    .decimalDigits
+                )
+
+
+        if let scalarIndex =
+            cleaned
+                .unicodeScalars
+                .firstIndex(
+                    where: {
+                        allowedStart
+                            .contains(
+                                $0
+                            )
+                    }
+                ) {
+
+            return String(
+                cleaned
+                    .unicodeScalars[
+                        scalarIndex...
+                    ]
+            )
+            .trimmingCharacters(
+                in:
+                    .whitespacesAndNewlines
+            )
+        }
+
+
+        return cleaned
     }
 
 

@@ -87,6 +87,10 @@ struct TransactionImportView:
         ""
 
     @State
+    private var sourceDetail =
+        ""
+
+    @State
     private var errorMessage:
         String?
 
@@ -186,7 +190,9 @@ struct TransactionImportView:
                 allowedContentTypes:
                     [
                         .commaSeparatedText,
-                        .plainText
+                        .tabSeparatedText,
+                        .plainText,
+                        .zip
                     ]
             ) { result in
 
@@ -257,7 +263,7 @@ struct TransactionImportView:
             } label: {
 
                 Label(
-                    "选择 CSV / TSV 文件",
+                    "选择 Numbers 导出的 ZIP / CSV",
                     systemImage:
                         "doc.badge.plus"
                 )
@@ -285,6 +291,20 @@ struct TransactionImportView:
                     value:
                         sourceName
                 )
+
+
+                if !sourceDetail.isEmpty {
+
+                    Text(
+                        sourceDetail
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
             }
 
         } header: {
@@ -296,7 +316,7 @@ struct TransactionImportView:
         } footer: {
 
             Text(
-                "你上传的这类 Numbers“个人预算”账单可以导入：在 Numbers 中复制明细表，回到这里点“从 Numbers 剪贴板读取”；或者在 Numbers 中导出 CSV 后选择文件。原生 .numbers 文件内部是 Apple 的 IWA 格式，本版不直接解析，以避免账单误读。"
+                "Numbers 在含多个表格时会把 CSV 导出成 ZIP。本版可直接选择这个 ZIP，会自动找到“交易明细”表并忽略月支出/月收入汇总；也支持单个 CSV、TSV 和 Numbers 剪贴板。"
             )
         }
     }
@@ -730,20 +750,55 @@ struct TransactionImportView:
                 )
 
 
-            let text =
-                try TransactionImportService
-                    .decodeText(
-                        data:
-                            data
+            if url.pathExtension
+                .lowercased() ==
+                "zip" {
+
+                let selection =
+                    try TransactionImportService
+                        .extractNumbersZIP(
+                            data:
+                                data
+                        )
+
+
+                try loadText(
+                    selection.text,
+                    source:
+                        url
+                            .lastPathComponent
+                )
+
+
+                sourceDetail =
+                    "已自动选择：\(selection.entryName)" +
+                    (
+                        selection.ignoredCSVCount >
+                        0
+                        ? "；忽略 \(selection.ignoredCSVCount) 个汇总 CSV。"
+                        : ""
                     )
 
+            } else {
 
-            try loadText(
-                text,
-                source:
-                    url
-                        .lastPathComponent
-            )
+                let text =
+                    try TransactionImportService
+                        .decodeText(
+                            data:
+                                data
+                        )
+
+
+                try loadText(
+                    text,
+                    source:
+                        url
+                            .lastPathComponent
+                )
+
+                sourceDetail =
+                    ""
+            }
 
         } catch {
 
@@ -789,6 +844,9 @@ struct TransactionImportView:
                 source:
                     "Numbers 剪贴板"
             )
+
+            sourceDetail =
+                ""
 
         } catch {
 
