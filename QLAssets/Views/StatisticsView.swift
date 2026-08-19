@@ -1128,6 +1128,11 @@ struct StatisticsView: View {
 
     var body: some View {
 
+        // 统计页交互回归保护：
+        // - 饼图：扇区/图例可点选，选中后突出并过滤明细，再点一次取消。
+        // - 每日柱状图：chartXSelection 选日期并显示具体金额。
+        // - 六个月柱状图：chartXSelection 选月份并显示收入/支出具体金额。
+        // 后续改统计页布局时不要替换成静态 Chart。
         ScrollView {
 
             VStack(
