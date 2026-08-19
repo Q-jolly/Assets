@@ -251,7 +251,7 @@ struct CategoryManagerView:
             }
         }
         .navigationTitle(
-            "分类管理"
+            "管理分类"
         )
         .navigationBarTitleDisplayMode(
             .inline

@@ -1542,7 +1542,7 @@ enum TransactionImportService {
                 )
 
 
-            let category =
+            let importedCategory =
                 mapping
                     .categoryColumn
                     .flatMap {
@@ -1564,6 +1564,13 @@ enum TransactionImportService {
                     for:
                         inferredType
                 )
+
+
+            let category =
+                CategoryNormalizer
+                    .normalized(
+                        importedCategory
+                    )
 
 
             let note =
@@ -2619,19 +2626,29 @@ enum TransactionImportService {
         let existing =
             Set(
                 categories.map {
-                    $0.name
+                    CategoryNormalizer
+                        .normalized(
+                            $0.name
+                        )
                 }
             )
 
 
         let newNames =
-            names
-                .filter {
-                    !existing.contains(
-                        $0
-                    )
+            Set(
+                names.map {
+                    CategoryNormalizer
+                        .normalized(
+                            $0
+                        )
                 }
-                .sorted()
+            )
+            .filter {
+                !existing.contains(
+                    $0
+                )
+            }
+            .sorted()
 
 
         guard !newNames.isEmpty

@@ -2054,6 +2054,8 @@ struct AddCardView: View {
                 linkedAccountSection
 
                 cardFaceSection
+
+                cardBackFaceSection
             }
             .scrollDismissesKeyboard(
                 .interactively
@@ -2422,7 +2424,66 @@ struct AddCardView: View {
             }
 
 
-            Divider()
+            if let faceMessage {
+
+                Text(
+                    faceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "正面卡面"
+            )
+
+        } footer: {
+
+            Text(
+                "正面自定义卡面只保存在本机，不会上传。银行卡号仍只保存后四位。"
+            )
+        }
+    }
+
+
+    private var cardBackFaceSection:
+        some View {
+
+        Section {
+
+            if let data =
+                customBackFaceImageData,
+               let image =
+                UIImage(
+                    data:
+                        data
+                ) {
+
+                Image(
+                    uiImage:
+                        image
+                )
+                .resizable()
+                .scaledToFill()
+                .frame(
+                    height:
+                        120
+                )
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius:
+                            14,
+                        style:
+                            .continuous
+                    )
+                )
+            }
 
 
             PhotosPicker(
@@ -2435,10 +2496,10 @@ struct AddCardView: View {
                 Label(
                     customBackFaceImageData ==
                         nil
-                    ? "识别银行卡背面卡面"
+                    ? "识别银行卡背面图片"
                     : "重新识别银行卡背面",
                     systemImage:
-                        "rectangle.portrait.and.arrow.right"
+                        "creditcard.and.123"
                 )
             }
 
@@ -2447,7 +2508,7 @@ struct AddCardView: View {
                 nil {
 
                 Button(
-                    "移除背面自定义卡面",
+                    "移除银行卡背面图片",
                     role:
                         .destructive
                 ) {
@@ -2474,30 +2535,16 @@ struct AddCardView: View {
                 )
             }
 
-
-            if let faceMessage {
-
-                Text(
-                    faceMessage
-                )
-                .font(
-                    .caption
-                )
-                .foregroundStyle(
-                    .secondary
-                )
-            }
-
         } header: {
 
             Text(
-                "卡面"
+                "背面卡面"
             )
 
         } footer: {
 
             Text(
-                "正面和背面卡面都只保存在本机。背面图片会自动检测银行卡边框并透视矫正，不会上传。银行卡号仍只保存后四位。"
+                "选择银行卡背面照片后，会自动识别卡片边框并透视矫正。背面只用于卡包翻转显示，不会读取或保存完整银行卡号。"
             )
         }
     }
@@ -4081,6 +4128,8 @@ struct EditCardView: View {
                 linkedAccountSection
 
                 cardFaceSection
+
+                cardBackFaceSection
             }
             .scrollDismissesKeyboard(
                 .interactively
@@ -4460,7 +4509,66 @@ struct EditCardView: View {
             }
 
 
-            Divider()
+            if let faceMessage {
+
+                Text(
+                    faceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+        } header: {
+
+            Text(
+                "正面卡面"
+            )
+
+        } footer: {
+
+            Text(
+                "正面自定义卡面只保存在本机，不写入 SwiftData，也不会上传。"
+            )
+        }
+    }
+
+
+    private var cardBackFaceSection:
+        some View {
+
+        Section {
+
+            if let data =
+                customBackFaceImageData,
+               let image =
+                UIImage(
+                    data:
+                        data
+                ) {
+
+                Image(
+                    uiImage:
+                        image
+                )
+                .resizable()
+                .scaledToFill()
+                .frame(
+                    height:
+                        120
+                )
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius:
+                            14,
+                        style:
+                            .continuous
+                    )
+                )
+            }
 
 
             PhotosPicker(
@@ -4473,10 +4581,10 @@ struct EditCardView: View {
                 Label(
                     customBackFaceImageData ==
                         nil
-                    ? "识别银行卡背面卡面"
+                    ? "识别银行卡背面图片"
                     : "重新识别银行卡背面",
                     systemImage:
-                        "rectangle.portrait.and.arrow.right"
+                        "creditcard.and.123"
                 )
             }
 
@@ -4485,7 +4593,7 @@ struct EditCardView: View {
                 nil {
 
                 Button(
-                    "移除背面自定义卡面",
+                    "移除银行卡背面图片",
                     role:
                         .destructive
                 ) {
@@ -4512,30 +4620,16 @@ struct EditCardView: View {
                 )
             }
 
-
-            if let faceMessage {
-
-                Text(
-                    faceMessage
-                )
-                .font(
-                    .caption
-                )
-                .foregroundStyle(
-                    .secondary
-                )
-            }
-
         } header: {
 
             Text(
-                "卡面"
+                "背面卡面"
             )
 
         } footer: {
 
             Text(
-                "正面和背面自定义卡面只保存在本机，不写入 SwiftData，也不会上传。背面识别只提取卡面，不会修改银行卡字段。"
+                "选择银行卡背面照片后，会自动识别卡片边框并透视矫正。背面只用于卡包翻转显示，不会读取或保存完整银行卡号。"
             )
         }
     }

@@ -184,38 +184,36 @@ struct TransactionImportView:
                     )
                 }
             }
-            .fileImporter(
+            .sheet(
                 isPresented:
-                    $showFileImporter,
-                allowedContentTypes:
-                    [
-                        .commaSeparatedText,
-                        .tabSeparatedText,
-                        .plainText,
-                        .zip
-                    ],
-                allowsMultipleSelection:
-                    true
-            ) { result in
+                    $showFileImporter
+            ) {
 
-                switch result {
+                MultiFileDocumentPicker(
+                    contentTypes:
+                        [
+                            .commaSeparatedText,
+                            .tabSeparatedText,
+                            .plainText,
+                            .zip
+                        ],
+                    onPick: {
+                        urls in
 
-                case .success(
-                    let urls
-                ):
+                        showFileImporter =
+                            false
 
-                    loadFiles(
-                        urls
-                    )
+                        loadFiles(
+                            urls
+                        )
+                    },
+                    onCancel: {
 
-                case .failure(
-                    let error
-                ):
-
-                    errorMessage =
-                        error
-                            .localizedDescription
-                }
+                        showFileImporter =
+                            false
+                    }
+                )
+                .ignoresSafeArea()
             }
             .alert(
                 "导入完成",
@@ -265,7 +263,7 @@ struct TransactionImportView:
             } label: {
 
                 Label(
-                    "选择一个或多个 ZIP / CSV",
+                    "批量选择 ZIP / CSV",
                     systemImage:
                         "doc.badge.plus"
                 )
@@ -318,7 +316,7 @@ struct TransactionImportView:
         } footer: {
 
             Text(
-                "支持一次选择多个 Numbers 导出的 ZIP、CSV 或 TSV。ZIP 会自动找到“交易明细”并忽略月支出/月收入汇总；多个文件会合并预览后一次导入，并继续按现有规则跳过重复账单。"
+                "支持一次批量选择多个 Numbers 导出的 ZIP、CSV 或 TSV。系统文件选择器会开启多选；ZIP 会自动找到“交易明细”并忽略月支出/月收入汇总。多个文件合并预览后一次导入，并继续跳过重复账单。"
             )
         }
     }
