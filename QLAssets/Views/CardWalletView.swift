@@ -2794,7 +2794,7 @@ struct AddCardView: View {
             } else {
 
                 recognitionMessage =
-                    "识别到文字，但没有可靠提取出银行卡信息。可以换一张更清晰、正面的图片。"
+                    "已提取卡面，但未识别到足够银行信息。该类艺术卡可能没有标准卡号，请手动补充后保存。"
             }
 
         } catch {

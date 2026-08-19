@@ -622,26 +622,25 @@ struct TransactionListView:
                                 .white
                             )
                             .frame(
-                                minWidth:
-                                    16,
-                                minHeight:
-                                    16
-                            )
-                            .padding(
-                                .horizontal,
-                                1
+                                width:
+                                    18,
+                                height:
+                                    18
                             )
                             .background(
-                                Color.red
+                                Circle()
+                                    .fill(
+                                        Color.red
+                                    )
                             )
                             .clipShape(
-                                Capsule()
+                                Circle()
                             )
                             .offset(
                                 x:
-                                    4,
+                                    8,
                                 y:
-                                    -4
+                                    -8
                             )
                         }
                     }
