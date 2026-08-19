@@ -348,6 +348,8 @@ struct CardWalletView: View {
                             linkedAccount(
                                 card
                             ),
+                        allCards:
+                            cards,
                         allowsFlip:
                             relativeIndex == 0,
                         onTap: {
@@ -957,6 +959,9 @@ struct FlippableBankCardView: View {
     let account:
         Account?
 
+    let allCards:
+        [BankCard]
+
     let allowsFlip:
         Bool
 
@@ -979,6 +984,7 @@ struct FlippableBankCardView: View {
     init(
         card: BankCard,
         account: Account?,
+        allCards: [BankCard] = [],
         allowsFlip: Bool = true,
         onTap: (() -> Void)? = nil
     ) {
@@ -988,6 +994,9 @@ struct FlippableBankCardView: View {
 
         self.account =
             account
+
+        self.allCards =
+            allCards
 
         self.allowsFlip =
             allowsFlip
@@ -1283,14 +1292,22 @@ struct FlippableBankCardView: View {
                             )
 
                             if let available =
-                                card.availableCredit {
+                                CreditAccountService
+                                    .availableCredit(
+                                        for:
+                                            card,
+                                        cards:
+                                            allCards.isEmpty
+                                            ? [card]
+                                            : allCards
+                                    ) {
 
                                 Text(
                                     available,
                                     format:
                                         .currency(
                                             code:
-                                                "CNY"
+                                                linkedAccount.currencyCode
                                         )
                                 )
                                 .font(
@@ -1557,7 +1574,13 @@ struct FlippableBankCardView: View {
                                     "信用额度",
                                 value:
                                     formattedCurrency(
-                                        card.creditLimit
+                                        CreditAccountService
+                                    .sharedCreditLimit(
+                                        for:
+                                            card,
+                                        cards:
+                                            cards
+                                    )
                                     )
                             )
 
@@ -3186,6 +3209,22 @@ struct AddCardView: View {
             card
         )
 
+
+        if card.cardType ==
+            .credit {
+
+            CreditAccountService
+                .synchronizeCreditLimit(
+                    card.creditLimit,
+                    for:
+                        card,
+                    cards:
+                        cards +
+                        [card]
+                )
+        }
+
+
         try?
             modelContext.save()
 
@@ -3509,6 +3548,12 @@ struct CardDetailView: View {
     private var transactions:
         [TransactionRecord]
 
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
+
     @State
     private var showEdit =
         false
@@ -3532,7 +3577,9 @@ struct CardDetailView: View {
                     card:
                         card,
                     account:
-                        linkedAccount
+                        linkedAccount,
+                    allCards:
+                        cards
                 )
                 .listRowInsets(
                     EdgeInsets()
@@ -3608,14 +3655,30 @@ struct CardDetailView: View {
 
                         Text(
                             formattedCurrency(
-                                card.creditLimit
+                                CreditAccountService
+                                    .sharedCreditLimit(
+                                        for:
+                                            card,
+                                        cards:
+                                            cards
+                                    )
                             )
                         )
                     }
 
 
                     LabeledContent(
-                        "当前欠款"
+                        CreditAccountService
+                            .group(
+                                for:
+                                    card,
+                                cards:
+                                    cards
+                            )
+                            .count >
+                            1
+                        ? "本卡欠款"
+                        : "当前欠款"
                     ) {
 
                         Text(
@@ -3629,13 +3692,51 @@ struct CardDetailView: View {
                     }
 
 
+                    if CreditAccountService
+                        .group(
+                            for:
+                                card,
+                            cards:
+                                cards
+                        )
+                        .count >
+                        1 {
+
+                        LabeledContent(
+                            "共用账户欠款"
+                        ) {
+
+                            Text(
+                                formattedCurrency(
+                                    CreditAccountService
+                                        .sharedDebt(
+                                            for:
+                                                card,
+                                            cards:
+                                                cards
+                                        )
+                                )
+                            )
+                            .fontWeight(
+                                .semibold
+                            )
+                        }
+                    }
+
+
                     LabeledContent(
                         "可用额度"
                     ) {
 
                         Text(
                             formattedCurrency(
-                                card.availableCredit
+                                CreditAccountService
+                                    .availableCredit(
+                                        for:
+                                            card,
+                                        cards:
+                                            cards
+                                    )
                             )
                         )
                     }
@@ -5150,6 +5251,20 @@ struct EditCardView: View {
             card.repaymentDay =
                 nil
         }
+
+        if cardType ==
+            .credit {
+
+            CreditAccountService
+                .synchronizeCreditLimit(
+                    card.creditLimit,
+                    for:
+                        card,
+                    cards:
+                        cards
+                )
+        }
+
 
         try?
             modelContext.save()

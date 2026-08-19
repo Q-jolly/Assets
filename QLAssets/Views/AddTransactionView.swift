@@ -69,6 +69,23 @@ struct AddTransactionView: View {
         ""
 
     @State
+    private var currencyCode =
+        "CNY"
+
+    @State
+    private var exchangeRates =
+        ExchangeRateService
+            .cachedSnapshot()
+
+    @State
+    private var isRefreshingRate =
+        false
+
+    @State
+    private var exchangeRateMessage:
+        String?
+
+    @State
     private var category =
         "餐饮"
 
@@ -91,6 +108,10 @@ struct AddTransactionView: View {
     @State
     private var date =
         Date()
+
+    @State
+    private var dateWasManuallyEdited =
+        false
 
     @State
     private var showSavedAlert =
@@ -256,11 +277,19 @@ struct AddTransactionView: View {
 
                 HStack {
 
-                    Text("¥")
-                        .font(.title2)
-                        .foregroundStyle(
-                            .secondary
-                        )
+                    Text(
+                        CurrencyCatalog
+                            .symbol(
+                                for:
+                                    currencyCode
+                            )
+                    )
+                    .font(
+                        .title2
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
 
                     TextField(
                         "0.00",
@@ -276,6 +305,103 @@ struct AddTransactionView: View {
                     .font(
                         .title2.bold()
                     )
+
+
+                    Picker(
+                        "币种",
+                        selection:
+                            $currencyCode
+                    ) {
+
+                        ForEach(
+                            CurrencyCatalog
+                                .supported
+                        ) { currency in
+
+                            Text(
+                                currency.code
+                            )
+                            .tag(
+                                currency.code
+                            )
+                        }
+                    }
+                    .labelsHidden()
+                    .disabled(
+                        transactionType ==
+                            .creditRepayment ||
+                        transactionType ==
+                            .adjustment
+                    )
+                }
+
+
+                if currencyCode !=
+                    "CNY" {
+
+                    if let converted =
+                        cnyAmount {
+
+                        LabeledContent(
+                            "人民币估值"
+                        ) {
+
+                            Text(
+                                converted,
+                                format:
+                                    .currency(
+                                        code:
+                                            "CNY"
+                                    )
+                            )
+                            .fontWeight(
+                                .semibold
+                            )
+                        }
+                    }
+
+
+                    if let rate =
+                        selectedCurrencyRate {
+
+                        Text(
+                            "1 \(currencyCode) ≈ ¥\(rate.formatted(.number.precision(.fractionLength(4)))) · \(exchangeRates.sourceName)"
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+
+                    } else if isRefreshingRate {
+
+                        Label(
+                            "正在查询银行实时汇率…",
+                            systemImage:
+                                "arrow.triangle.2.circlepath"
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
+
+
+                    if let exchangeRateMessage {
+
+                        Text(
+                            exchangeRateMessage
+                        )
+                        .font(
+                            .caption
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                    }
                 }
             }
 
@@ -381,7 +507,13 @@ struct AddTransactionView: View {
                             ) {
 
                                 Text(
-                                    card.currentDebt ?? 0,
+                                    CreditAccountService
+                                        .sharedDebt(
+                                            for:
+                                                card,
+                                            cards:
+                                                cards
+                                        ),
                                     format:
                                         .currency(
                                             code:
@@ -395,7 +527,13 @@ struct AddTransactionView: View {
 
 
                             if let available =
-                                card.availableCredit {
+                                CreditAccountService
+                                    .availableCredit(
+                                        for:
+                                            card,
+                                        cards:
+                                            cards
+                                    ) {
 
                                 LabeledContent(
                                     "可用额度"
@@ -439,7 +577,7 @@ struct AddTransactionView: View {
                         ) { account in
 
                             Text(
-                                "\(account.name)  \(account.balance.formatted(.currency(code: "CNY")))"
+                                "\(account.name)  \(account.balance.formatted(.currency(code: account.currencyCode)))"
                             )
                             .tag(
                                 Optional(
@@ -491,7 +629,20 @@ struct AddTransactionView: View {
                 DatePicker(
                     "日期",
                     selection:
-                        $date
+                        Binding(
+                            get: {
+                                date
+                            },
+                            set: {
+                                newValue in
+
+                                date =
+                                    newValue
+
+                                dateWasManuallyEdited =
+                                    true
+                            }
+                        )
                 )
 
                 TextField(
@@ -552,6 +703,44 @@ struct AddTransactionView: View {
         .onAppear {
 
             ensureDefaults()
+
+            if !dateWasManuallyEdited {
+
+                date =
+                    Date()
+            }
+
+            synchronizeCurrencyWithCurrentContext()
+        }
+        .task {
+
+            while !Task.isCancelled {
+
+                if !dateWasManuallyEdited {
+
+                    await MainActor.run {
+
+                        date =
+                            Date()
+                    }
+                }
+
+
+                try? await Task.sleep(
+                    for:
+                        .seconds(15)
+                )
+            }
+        }
+        .task(
+            id:
+                currencyCode +
+                (selectedSourceAccount?.currencyCode ?? "") +
+                (selectedTargetAccount?.currencyCode ?? "") +
+                (selectedCreditCard?.bankName ?? "")
+        ) {
+
+            await refreshExchangeRatesIfNeeded()
         }
         .onChange(
             of: mode
@@ -564,6 +753,25 @@ struct AddTransactionView: View {
         ) { _ in
 
             updateForCreditActionChange()
+        }
+        .onChange(
+            of:
+                sourceAccountID
+        ) { _, _ in
+
+            if mode ==
+                .transfer {
+
+                synchronizeCurrencyWithCurrentContext()
+            }
+        }
+        .onChange(
+            of:
+                currencyCode
+        ) { _, _ in
+
+            exchangeRateMessage =
+                nil
         }
         .onChange(
             of: creditCards.map(\.id)
@@ -730,6 +938,163 @@ struct AddTransactionView: View {
     }
 
 
+    private var selectedSourceAccount:
+        Account? {
+
+        guard let sourceAccountID
+        else {
+            return nil
+        }
+
+
+        return accounts.first {
+            $0.id ==
+            sourceAccountID
+        }
+    }
+
+
+    private var selectedTargetAccount:
+        Account? {
+
+        guard let targetAccountID
+        else {
+            return nil
+        }
+
+
+        return accounts.first {
+            $0.id ==
+            targetAccountID
+        }
+    }
+
+
+    private var selectedCurrencyRate:
+        Double? {
+
+        exchangeRates
+            .rateToCNY(
+                for:
+                    currencyCode
+            )
+    }
+
+
+    private var cnyAmount:
+        Double? {
+
+        guard let amount
+        else {
+            return nil
+        }
+
+
+        guard let rate =
+            selectedCurrencyRate
+        else {
+            return nil
+        }
+
+
+        return amount *
+            rate
+    }
+
+
+    private func rateToCNY(
+        for account:
+            Account?
+    ) -> Double? {
+
+        guard let account
+        else {
+            return nil
+        }
+
+
+        if account.currencyCode ==
+            "CNY" {
+
+            return 1
+        }
+
+
+        return exchangeRates
+            .rateToCNY(
+                for:
+                    account.currencyCode
+            ) ??
+            account.lastKnownRateToCNY
+    }
+
+
+    private var sourceNativeAmount:
+        Double? {
+
+        guard let cnyAmount
+        else {
+            return nil
+        }
+
+
+        guard let source =
+            selectedSourceAccount
+        else {
+            return nil
+        }
+
+
+        guard let rate =
+            rateToCNY(
+                for:
+                    source
+            ),
+            rate >
+                0
+        else {
+            return nil
+        }
+
+
+        return cnyAmount /
+            rate
+    }
+
+
+    private var targetNativeAmount:
+        Double? {
+
+        guard let cnyAmount
+        else {
+            return nil
+        }
+
+
+        guard let target =
+            selectedTargetAccount
+        else {
+            return nil
+        }
+
+
+        guard let rate =
+            rateToCNY(
+                for:
+                    target
+            ),
+            rate >
+                0
+        else {
+            return nil
+        }
+
+
+        return cnyAmount /
+            rate
+    }
+
+
     private var amount:
         Double? {
 
@@ -748,7 +1113,9 @@ struct AddTransactionView: View {
 
         guard
             let amount,
-            amount > 0
+            amount > 0,
+            cnyAmount !=
+                nil
         else {
             return false
         }
@@ -760,7 +1127,9 @@ struct AddTransactionView: View {
 
             return
                 sourceAccountID !=
-                nil
+                    nil &&
+                sourceNativeAmount !=
+                    nil
 
         case .transfer:
 
@@ -770,7 +1139,11 @@ struct AddTransactionView: View {
                 targetAccountID !=
                     nil &&
                 targetAccountID !=
-                    sourceAccountID
+                    sourceAccountID &&
+                sourceNativeAmount !=
+                    nil &&
+                targetNativeAmount !=
+                    nil
 
         case .creditExpense:
 
@@ -788,12 +1161,16 @@ struct AddTransactionView: View {
                 return false
             }
 
-            return amount <=
-                max(
-                    card.currentDebt ?? 0,
-                    0
-                ) +
-                0.0001
+            return
+                sourceNativeAmount !=
+                    nil &&
+                (cnyAmount ?? 0) <=
+                    max(
+                        card.currentDebt ??
+                        0,
+                        0
+                    ) +
+                    0.0001
 
         case .adjustment:
             return false
@@ -855,6 +1232,8 @@ struct AddTransactionView: View {
             selectedCreditCardID =
                 creditCards.first?.id
         }
+
+        synchronizeCurrencyWithCurrentContext()
     }
 
 
@@ -882,6 +1261,8 @@ struct AddTransactionView: View {
         case .creditCard:
             updateForCreditActionChange()
         }
+
+        synchronizeCurrencyWithCurrentContext()
     }
 
 
@@ -913,7 +1294,9 @@ struct AddTransactionView: View {
         isAmountFocused =
             false
 
-        guard let amount
+        guard
+            let amount,
+            let cnyAmount
         else {
             return
         }
@@ -923,7 +1306,23 @@ struct AddTransactionView: View {
                 type:
                     transactionType,
                 amount:
+                    cnyAmount,
+                originalAmount:
                     amount,
+                currencyCode:
+                    currencyCode,
+                exchangeRateToCNY:
+                    selectedCurrencyRate,
+                accountAmount:
+                    transactionType ==
+                        .creditExpense
+                    ? nil
+                    : sourceNativeAmount,
+                targetAccountAmount:
+                    transactionType ==
+                        .transfer
+                    ? targetNativeAmount
+                    : nil,
                 category:
                     transactionType ==
                         .transfer
@@ -993,7 +1392,196 @@ struct AddTransactionView: View {
         date =
             Date()
 
+        dateWasManuallyEdited =
+            false
+
         targetAccountID =
             nil
+
+        synchronizeCurrencyWithCurrentContext()
+    }
+
+
+    private func synchronizeCurrencyWithCurrentContext() {
+
+        switch transactionType {
+
+        case .transfer:
+
+            currencyCode =
+                selectedSourceAccount?
+                    .currencyCode ??
+                "CNY"
+
+        case .creditRepayment:
+
+            currencyCode =
+                "CNY"
+
+        case .expense,
+             .income:
+
+            if currencyCode ==
+                "CNY",
+               let accountCurrency =
+                selectedSourceAccount?
+                    .currencyCode,
+               accountCurrency !=
+                "CNY" {
+
+                currencyCode =
+                    accountCurrency
+            }
+
+        case .creditExpense:
+            break
+
+        case .adjustment:
+            currencyCode =
+                "CNY"
+        }
+    }
+
+
+    @MainActor
+    private func refreshExchangeRatesIfNeeded() async {
+
+        let requiredCodes =
+            Set(
+                [
+                    currencyCode,
+                    selectedSourceAccount?
+                        .currencyCode,
+                    selectedTargetAccount?
+                        .currencyCode
+                ]
+                .compactMap {
+                    $0
+                }
+                .filter {
+                    $0 !=
+                    "CNY"
+                }
+            )
+
+
+        guard !requiredCodes.isEmpty
+        else {
+
+            exchangeRateMessage =
+                nil
+
+            return
+        }
+
+
+        let hasAllRates =
+            requiredCodes.allSatisfy {
+                exchangeRates
+                    .rateToCNY(
+                        for:
+                            $0
+                    ) !=
+                    nil
+            }
+
+
+        if hasAllRates,
+           Date()
+            .timeIntervalSince(
+                exchangeRates.fetchedAt
+            ) <
+            5 *
+            60 {
+
+            return
+        }
+
+
+        isRefreshingRate =
+            true
+
+        defer {
+
+            isRefreshingRate =
+                false
+        }
+
+
+        do {
+
+            let provider =
+                ExchangeRateService
+                    .preferredProvider(
+                        for:
+                            selectedCreditCard?
+                                .bankName
+                    )
+
+            var refreshed =
+                try await ExchangeRateService
+                    .refresh(
+                        provider:
+                            provider
+                    )
+
+
+            let stillMissing =
+                requiredCodes.contains {
+                    refreshed.rateToCNY(
+                        for:
+                            $0
+                    ) ==
+                    nil
+                }
+
+
+            if stillMissing,
+               provider !=
+                .boc {
+
+                refreshed =
+                    try await ExchangeRateService
+                        .refresh(
+                            provider:
+                                .boc
+                        )
+            }
+
+
+            exchangeRates =
+                refreshed
+
+            exchangeRateMessage =
+                "汇率仅用于记账估值，实际信用卡入账汇率以发卡行清算结果为准。"
+
+        } catch {
+
+            let cached =
+                ExchangeRateService
+                    .cachedSnapshot()
+
+            if requiredCodes.allSatisfy(
+                {
+                    cached.rateToCNY(
+                        for:
+                            $0
+                    ) !=
+                        nil
+                }
+            ) {
+
+                exchangeRates =
+                    cached
+
+                exchangeRateMessage =
+                    "实时查询失败，当前使用上次缓存的银行汇率。"
+
+            } else {
+
+                exchangeRateMessage =
+                    "暂时无法取得 \(currencyCode) 汇率，请联网后重试。"
+            }
+        }
     }
 }

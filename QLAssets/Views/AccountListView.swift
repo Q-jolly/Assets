@@ -209,16 +209,42 @@ struct AccountListView: View {
 
             Spacer()
 
-            Text(
-                account.balance,
-                format:
-                    .currency(
-                        code: "CNY"
+            VStack(
+                alignment:
+                    .trailing,
+                spacing:
+                    2
+            ) {
+
+                Text(
+                    account.balance,
+                    format:
+                        .currency(
+                            code:
+                                account.currencyCode
+                        )
+                )
+                .fontWeight(
+                    .semibold
+                )
+
+
+                if account.currencyCode !=
+                    "CNY",
+                   let rate =
+                    account.lastKnownRateToCNY {
+
+                    Text(
+                        "≈ \((account.balance * rate).formatted(.currency(code: "CNY")))"
                     )
-            )
-            .fontWeight(
-                .semibold
-            )
+                    .font(
+                        .caption2
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+            }
         }
         .padding(
             .vertical,
@@ -373,12 +399,47 @@ struct AccountDetailView: View {
                         account.balance,
                         format:
                             .currency(
-                                code: "CNY"
+                                code:
+                                    account.currencyCode
                             )
                     )
                     .fontWeight(
                         .semibold
                     )
+                }
+
+
+                LabeledContent(
+                    "账户币种",
+                    value:
+                        CurrencyCatalog
+                            .definition(
+                                for:
+                                    account.currencyCode
+                            )
+                            .title
+                )
+
+
+                if account.currencyCode !=
+                    "CNY",
+                   let rate =
+                    account.lastKnownRateToCNY {
+
+                    LabeledContent(
+                        "人民币估值"
+                    ) {
+
+                        Text(
+                            account.balance *
+                            rate,
+                            format:
+                                .currency(
+                                    code:
+                                        "CNY"
+                                )
+                        )
+                    }
                 }
             }
 
@@ -551,6 +612,10 @@ struct AddAccountView: View {
     private var balanceText =
         ""
 
+    @State
+    private var currencyCode =
+        "CNY"
+
     @FocusState
     private var isBalanceFocused:
         Bool
@@ -588,6 +653,27 @@ struct AddAccountView: View {
                             .tag(type)
                         }
                     }
+
+
+                    Picker(
+                        "币种",
+                        selection:
+                            $currencyCode
+                    ) {
+
+                        ForEach(
+                            CurrencyCatalog
+                                .supported
+                        ) { currency in
+
+                            Text(
+                                currency.title
+                            )
+                            .tag(
+                                currency.code
+                            )
+                        }
+                    }
                 }
 
 
@@ -595,7 +681,13 @@ struct AddAccountView: View {
 
                     HStack {
 
-                        Text("¥")
+                        Text(
+                            CurrencyCatalog
+                                .symbol(
+                                    for:
+                                        currencyCode
+                                )
+                        )
                             .foregroundStyle(
                                 .secondary
                             )
@@ -708,7 +800,9 @@ struct AddAccountView: View {
                 type:
                     accountType,
                 balance:
-                    balance
+                    balance,
+                currencyCode:
+                    currencyCode
             )
 
         modelContext.insert(
@@ -744,6 +838,10 @@ struct EditAccountView: View {
     private var type:
         AccountType
 
+    @State
+    private var currencyCode:
+        String
+
 
     init(
         account: Account
@@ -762,6 +860,12 @@ struct EditAccountView: View {
             State(
                 initialValue:
                     account.type
+            )
+
+        _currencyCode =
+            State(
+                initialValue:
+                    account.currencyCode
             )
     }
 
@@ -798,6 +902,27 @@ struct EditAccountView: View {
                                     item.icon
                             )
                             .tag(item)
+                        }
+                    }
+
+
+                    Picker(
+                        "币种",
+                        selection:
+                            $currencyCode
+                    ) {
+
+                        ForEach(
+                            CurrencyCatalog
+                                .supported
+                        ) { currency in
+
+                            Text(
+                                currency.title
+                            )
+                            .tag(
+                                currency.code
+                            )
                         }
                     }
                 }
@@ -857,6 +982,16 @@ struct EditAccountView: View {
 
         account.typeRaw =
             type.rawValue
+
+        account.currencyCodeRaw =
+            currencyCode
+
+        if currencyCode ==
+            "CNY" {
+
+            account.lastKnownRateToCNY =
+                1
+        }
 
         try? modelContext.save()
 
@@ -962,7 +1097,8 @@ struct BalanceAdjustmentView: View {
                         account.balance,
                         format:
                             .currency(
-                                code: "CNY"
+                                code:
+                                    account.currencyCode
                             )
                     )
                     .font(
@@ -977,7 +1113,13 @@ struct BalanceAdjustmentView: View {
 
                     HStack {
 
-                        Text("¥")
+                        Text(
+                            CurrencyCatalog
+                                .symbol(
+                                    for:
+                                        account.currencyCode
+                                )
+                        )
 
                         TextField(
                             "0.00",
@@ -1002,7 +1144,8 @@ struct BalanceAdjustmentView: View {
                         difference,
                         format:
                             .currency(
-                                code: "CNY"
+                                code:
+                                    account.currencyCode
                             )
                     )
                     .foregroundStyle(

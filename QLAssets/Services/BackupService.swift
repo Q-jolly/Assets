@@ -60,6 +60,12 @@ struct BackupAccount:
     let balance:
         Double
 
+    let currencyCodeRaw:
+        String?
+
+    let lastKnownRateToCNY:
+        Double?
+
     let createdAt:
         Date
 }
@@ -76,6 +82,21 @@ struct BackupTransaction:
 
     let amount:
         Double
+
+    let originalAmount:
+        Double?
+
+    let currencyCodeRaw:
+        String?
+
+    let exchangeRateToCNY:
+        Double?
+
+    let accountAmount:
+        Double?
+
+    let targetAccountAmount:
+        Double?
 
     let category:
         String
@@ -198,7 +219,7 @@ enum BackupRestoreError:
 enum BackupService {
 
     static let currentVersion =
-        4
+        5
 
 
     static func makeBackup(
@@ -276,6 +297,10 @@ enum BackupService {
                                 $0.typeRaw,
                             balance:
                                 $0.balance,
+                            currencyCodeRaw:
+                                $0.currencyCodeRaw,
+                            lastKnownRateToCNY:
+                                $0.lastKnownRateToCNY,
                             createdAt:
                                 $0.createdAt
                         )
@@ -289,6 +314,16 @@ enum BackupService {
                                 $0.typeRaw,
                             amount:
                                 $0.amount,
+                            originalAmount:
+                                $0.originalAmount,
+                            currencyCodeRaw:
+                                $0.currencyCodeRaw,
+                            exchangeRateToCNY:
+                                $0.exchangeRateToCNY,
+                            accountAmount:
+                                $0.accountAmount,
+                            targetAccountAmount:
+                                $0.targetAccountAmount,
                             category:
                                 $0.category,
                             accountID:
@@ -543,7 +578,12 @@ enum BackupService {
                     type:
                         type,
                     balance:
-                        item.balance
+                        item.balance,
+                    currencyCode:
+                        item.currencyCodeRaw ??
+                        "CNY",
+                    lastKnownRateToCNY:
+                        item.lastKnownRateToCNY
                 )
 
             account.id =
@@ -640,6 +680,16 @@ enum BackupService {
                         type,
                     amount:
                         item.amount,
+                    originalAmount:
+                        item.originalAmount,
+                    currencyCode:
+                        item.currencyCodeRaw,
+                    exchangeRateToCNY:
+                        item.exchangeRateToCNY,
+                    accountAmount:
+                        item.accountAmount,
+                    targetAccountAmount:
+                        item.targetAccountAmount,
                     category:
                         item.category,
                     accountID:

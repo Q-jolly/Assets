@@ -19,6 +19,11 @@ enum TransactionService {
     static func create(
         type: TransactionType,
         amount: Double,
+        originalAmount: Double? = nil,
+        currencyCode: String? = nil,
+        exchangeRateToCNY: Double? = nil,
+        accountAmount: Double? = nil,
+        targetAccountAmount: Double? = nil,
         category: String,
         accountID: UUID?,
         targetAccountID: UUID? = nil,
@@ -53,6 +58,16 @@ enum TransactionService {
                 type: type,
                 amount:
                     normalizedAmount,
+                originalAmount:
+                    originalAmount,
+                currencyCode:
+                    currencyCode,
+                exchangeRateToCNY:
+                    exchangeRateToCNY,
+                accountAmount:
+                    accountAmount,
+                targetAccountAmount:
+                    targetAccountAmount,
                 category:
                     category,
                 accountID:
@@ -160,6 +175,11 @@ enum TransactionService {
             TransactionRecord,
         type: TransactionType,
         amount: Double,
+        originalAmount: Double? = nil,
+        currencyCode: String? = nil,
+        exchangeRateToCNY: Double? = nil,
+        accountAmount: Double? = nil,
+        targetAccountAmount: Double? = nil,
         category: String,
         accountID: UUID?,
         targetAccountID: UUID?,
@@ -200,6 +220,56 @@ enum TransactionService {
             transaction.amount =
                 abs(amount)
         }
+
+        let oldAbsoluteAmount =
+            abs(
+                snapshot.amount
+            )
+
+        let newAbsoluteAmount =
+            abs(
+                amount
+            )
+
+        let amountScale =
+            oldAbsoluteAmount >
+                0.000_001
+            ? newAbsoluteAmount /
+                oldAbsoluteAmount
+            : 1
+
+
+        transaction.originalAmount =
+            originalAmount ??
+            snapshot.originalAmount
+                .map {
+                    $0 *
+                    amountScale
+                }
+
+        transaction.currencyCodeRaw =
+            currencyCode?.uppercased() ??
+            snapshot.currencyCodeRaw
+
+        transaction.exchangeRateToCNY =
+            exchangeRateToCNY ??
+            snapshot.exchangeRateToCNY
+
+        transaction.accountAmount =
+            accountAmount ??
+            snapshot.accountAmount
+                .map {
+                    $0 *
+                    amountScale
+                }
+
+        transaction.targetAccountAmount =
+            targetAccountAmount ??
+            snapshot.targetAccountAmount
+                .map {
+                    $0 *
+                    amountScale
+                }
 
         transaction.category =
             CategoryNormalizer
@@ -303,6 +373,18 @@ enum TransactionService {
                 transaction.amount
             )
 
+        let sourceAccountAmount =
+            abs(
+                transaction.accountAmount ??
+                amount
+            )
+
+        let targetAccountAmount =
+            abs(
+                transaction.targetAccountAmount ??
+                amount
+            )
+
         switch transaction.type {
 
         case .creditExpense:
@@ -368,7 +450,7 @@ enum TransactionService {
             }
 
             source.balance -=
-                amount
+                sourceAccountAmount
 
             card.currentDebt =
                 max(
@@ -399,12 +481,12 @@ enum TransactionService {
             case .expense:
 
                 source.balance -=
-                    amount
+                    sourceAccountAmount
 
             case .income:
 
                 source.balance +=
-                    amount
+                    sourceAccountAmount
 
             case .transfer:
 
@@ -424,10 +506,10 @@ enum TransactionService {
                 }
 
                 source.balance -=
-                    amount
+                    sourceAccountAmount
 
                 target.balance +=
-                    amount
+                    targetAccountAmount
 
             case .adjustment:
 
@@ -458,6 +540,18 @@ enum TransactionService {
         let amount =
             abs(
                 transaction.amount
+            )
+
+        let sourceAccountAmount =
+            abs(
+                transaction.accountAmount ??
+                amount
+            )
+
+        let targetAccountAmount =
+            abs(
+                transaction.targetAccountAmount ??
+                amount
             )
 
         switch transaction.type {
@@ -524,7 +618,7 @@ enum TransactionService {
             }
 
             source.balance +=
-                amount
+                sourceAccountAmount
 
             card.currentDebt =
                 max(
@@ -556,12 +650,12 @@ enum TransactionService {
             case .expense:
 
                 source.balance +=
-                    amount
+                    sourceAccountAmount
 
             case .income:
 
                 source.balance -=
-                    amount
+                    sourceAccountAmount
 
             case .transfer:
 
@@ -579,10 +673,10 @@ enum TransactionService {
                 }
 
                 source.balance +=
-                    amount
+                    sourceAccountAmount
 
                 target.balance -=
-                    amount
+                    targetAccountAmount
 
             case .adjustment:
 
@@ -649,6 +743,16 @@ enum TransactionService {
 
         let amount: Double
 
+        let originalAmount: Double?
+
+        let currencyCodeRaw: String?
+
+        let exchangeRateToCNY: Double?
+
+        let accountAmount: Double?
+
+        let targetAccountAmount: Double?
+
         let category: String
 
         let accountID: UUID
@@ -674,6 +778,21 @@ enum TransactionService {
 
             amount =
                 transaction.amount
+
+            originalAmount =
+                transaction.originalAmount
+
+            currencyCodeRaw =
+                transaction.currencyCodeRaw
+
+            exchangeRateToCNY =
+                transaction.exchangeRateToCNY
+
+            accountAmount =
+                transaction.accountAmount
+
+            targetAccountAmount =
+                transaction.targetAccountAmount
 
             category =
                 transaction.category
@@ -708,6 +827,21 @@ enum TransactionService {
 
         transaction.amount =
             snapshot.amount
+
+        transaction.originalAmount =
+            snapshot.originalAmount
+
+        transaction.currencyCodeRaw =
+            snapshot.currencyCodeRaw
+
+        transaction.exchangeRateToCNY =
+            snapshot.exchangeRateToCNY
+
+        transaction.accountAmount =
+            snapshot.accountAmount
+
+        transaction.targetAccountAmount =
+            snapshot.targetAccountAmount
 
         transaction.category =
             snapshot.category

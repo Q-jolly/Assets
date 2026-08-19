@@ -4,6 +4,11 @@ import SwiftData
 
 struct HomeView: View {
 
+    @Environment(
+        \.modelContext
+    )
+    private var modelContext
+
     @Query(
         sort: \Account.createdAt
     )
@@ -35,6 +40,15 @@ struct HomeView: View {
     private var homeAmountsVisible =
         true
 
+    @State
+    private var exchangeRates =
+        ExchangeRateService
+            .cachedSnapshot()
+
+    @State
+    private var isRefreshingRates =
+        false
+
 
     // MARK: - 资产统计
 
@@ -42,7 +56,15 @@ struct HomeView: View {
         Double {
 
         accounts.reduce(0) {
-            $0 + $1.balance
+            result,
+            account in
+
+            result +
+            account.balance *
+            valuationRate(
+                for:
+                    account
+            )
         }
     }
 
@@ -216,6 +238,131 @@ struct HomeView: View {
         .navigationTitle(
             "QL Assets"
         )
+        .task {
+
+            await refreshExchangeRates()
+
+
+            while !Task.isCancelled {
+
+                try? await Task.sleep(
+                    for:
+                        .seconds(15 * 60)
+                )
+
+                await refreshExchangeRates(
+                    force:
+                        true
+                )
+            }
+        }
+        .refreshable {
+
+            await refreshExchangeRates(
+                force:
+                    true
+            )
+        }
+    }
+
+
+    private func valuationRate(
+        for account:
+            Account
+    ) -> Double {
+
+        if account.currencyCode ==
+            "CNY" {
+
+            return 1
+        }
+
+
+        return exchangeRates
+            .rateToCNY(
+                for:
+                    account.currencyCode
+            ) ??
+            account.lastKnownRateToCNY ??
+            0
+    }
+
+
+    @MainActor
+    private func refreshExchangeRates(
+        force:
+            Bool = false
+    ) async {
+
+        guard
+            !isRefreshingRates
+        else {
+            return
+        }
+
+
+        let hasForeignAccount =
+            accounts.contains {
+                $0.currencyCode !=
+                "CNY"
+            }
+
+
+        guard
+            hasForeignAccount ||
+            force
+        else {
+            return
+        }
+
+
+        isRefreshingRates =
+            true
+
+        defer {
+
+            isRefreshingRates =
+                false
+        }
+
+
+        do {
+
+            let snapshot =
+                try await ExchangeRateService
+                    .refresh(
+                        provider:
+                            .boc
+                    )
+
+            exchangeRates =
+                snapshot
+
+
+            for account in
+                accounts
+                where account.currencyCode !=
+                    "CNY" {
+
+                if let rate =
+                    snapshot.rateToCNY(
+                        for:
+                            account.currencyCode
+                    ) {
+
+                    account.lastKnownRateToCNY =
+                        rate
+                }
+            }
+
+
+            try?
+                modelContext.save()
+
+        } catch {
+
+            // 网络失败时继续使用缓存/账户最后一次汇率。
+        }
     }
 
 
@@ -692,6 +839,28 @@ struct HomeView: View {
                             .foregroundStyle(
                                 .secondary
                             )
+
+
+                            if CreditAccountService
+                                .group(
+                                    for:
+                                        card,
+                                    cards:
+                                        cards
+                                )
+                                .count >
+                                1 {
+
+                                Text(
+                                    "共用额度"
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+                            }
                         }
 
                         Spacer()
@@ -712,7 +881,13 @@ struct HomeView: View {
                             )
 
                             if let available =
-                                card.availableCredit {
+                                CreditAccountService
+                                    .availableCredit(
+                                        for:
+                                            card,
+                                        cards:
+                                            cards
+                                    ) {
 
                                 Text(
                                     homeAmountsVisible

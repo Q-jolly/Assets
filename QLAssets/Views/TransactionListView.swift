@@ -589,16 +589,20 @@ struct TransactionListView:
 
                 } label: {
 
-                    ZStack(
+                    Image(
+                        systemName:
+                            "line.3.horizontal.decrease.circle"
+                    )
+                    .frame(
+                        width:
+                            30,
+                        height:
+                            30
+                    )
+                    .overlay(
                         alignment:
                             .topTrailing
                     ) {
-
-                        Image(
-                            systemName:
-                                "line.3.horizontal.decrease.circle"
-                        )
-
 
                         if activeFilterCount >
                             0 {
@@ -618,26 +622,32 @@ struct TransactionListView:
                                 .white
                             )
                             .frame(
-                                width:
-                                    15,
-                                height:
-                                    15
+                                minWidth:
+                                    16,
+                                minHeight:
+                                    16
+                            )
+                            .padding(
+                                .horizontal,
+                                1
                             )
                             .background(
-                                Color
-                                    .red
+                                Color.red
                             )
                             .clipShape(
-                                Circle()
+                                Capsule()
                             )
                             .offset(
                                 x:
-                                    7,
+                                    4,
                                 y:
-                                    -7
+                                    -4
                             )
                         }
                     }
+                    .padding(
+                        4
+                    )
                 }
             }
         }
@@ -1555,8 +1565,27 @@ struct TransactionRowView: View {
                 "未知账户"
         }
 
+        let foreignText:
+            String
+
+
+        if transaction.currencyCode !=
+            "CNY",
+           let originalAmount =
+            transaction.originalAmount {
+
+            foreignText =
+                " · \(originalAmount.formatted(.number.precision(.fractionLength(0...2)))) \(transaction.currencyCode)"
+
+        } else {
+
+            foreignText =
+                ""
+        }
+
+
         return
-            "\(sourceText) · \(AppTime.listDateTime(transaction.date))"
+            "\(sourceText)\(foreignText) · \(AppTime.listDateTime(transaction.date))"
     }
 
 
@@ -1672,6 +1701,38 @@ struct TransactionDetailView: View {
                         .semibold
                     )
                 }
+
+                if transaction.currencyCode !=
+                    "CNY",
+                   let originalAmount =
+                    transaction.originalAmount {
+
+                    LabeledContent(
+                        "原币金额"
+                    ) {
+
+                        Text(
+                            originalAmount,
+                            format:
+                                .currency(
+                                    code:
+                                        transaction.currencyCode
+                                )
+                        )
+                    }
+
+
+                    if let rate =
+                        transaction.exchangeRateToCNY {
+
+                        LabeledContent(
+                            "记账汇率",
+                            value:
+                                "1 \(transaction.currencyCode) ≈ ¥\(rate.formatted(.number.precision(.fractionLength(4))))"
+                        )
+                    }
+                }
+
 
                 LabeledContent(
                     "分类",

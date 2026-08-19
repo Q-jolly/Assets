@@ -159,14 +159,24 @@ final class Account {
 
     var typeRaw: String
 
+    // 账户余额始终以账户本身币种记录。
+    // 旧账户 currencyCodeRaw 为 nil 时按 CNY 处理。
     var balance: Double
+
+    var currencyCodeRaw: String?
+
+    // 最近一次成功联网获取到的人民币估值汇率。
+    // 仅用于离线兜底，不参与历史交易汇率回写。
+    var lastKnownRateToCNY: Double?
 
     var createdAt: Date
 
     init(
         name: String,
         type: AccountType,
-        balance: Double = 0
+        balance: Double = 0,
+        currencyCode: String = "CNY",
+        lastKnownRateToCNY: Double? = nil
     ) {
 
         self.id = UUID()
@@ -179,9 +189,34 @@ final class Account {
         self.balance =
             balance
 
+        self.currencyCodeRaw =
+            currencyCode.uppercased()
+
+        self.lastKnownRateToCNY =
+            currencyCode.uppercased() == "CNY"
+            ? 1
+            : lastKnownRateToCNY
+
         self.createdAt =
             Date()
     }
+
+    var currencyCode: String {
+
+        let value =
+            currencyCodeRaw?
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+                .uppercased()
+
+        return
+            value?.isEmpty == false
+            ? value!
+            : "CNY"
+    }
+
 
     var type: AccountType {
 
@@ -209,7 +244,22 @@ final class TransactionRecord {
      余额调整：
      amount 可以为正数或负数
      */
+    // 人民币等值金额，用于统计、负债和净资产口径。
     var amount: Double
+
+    // 外币原始金额/币种/记账时汇率。旧数据保持 nil，等价于 CNY。
+    var originalAmount: Double?
+
+    var currencyCodeRaw: String?
+
+    var exchangeRateToCNY: Double?
+
+    // 实际作用到账户余额的本币金额。
+    // 例如 USD 10 记入美元账户时 accountAmount = 10；
+    // 同一笔记入人民币账户时 accountAmount = 人民币等值。
+    var accountAmount: Double?
+
+    var targetAccountAmount: Double?
 
     var category: String
 
@@ -230,6 +280,11 @@ final class TransactionRecord {
     init(
         type: TransactionType,
         amount: Double,
+        originalAmount: Double? = nil,
+        currencyCode: String? = nil,
+        exchangeRateToCNY: Double? = nil,
+        accountAmount: Double? = nil,
+        targetAccountAmount: Double? = nil,
         category: String,
         accountID: UUID,
         targetAccountID: UUID? = nil,
@@ -254,6 +309,21 @@ final class TransactionRecord {
                 abs(amount)
         }
 
+        self.originalAmount =
+            originalAmount
+
+        self.currencyCodeRaw =
+            currencyCode?.uppercased()
+
+        self.exchangeRateToCNY =
+            exchangeRateToCNY
+
+        self.accountAmount =
+            accountAmount
+
+        self.targetAccountAmount =
+            targetAccountAmount
+
         self.category =
             CategoryNormalizer
                 .normalized(
@@ -275,6 +345,30 @@ final class TransactionRecord {
         self.date =
             date
     }
+
+    var currencyCode: String {
+
+        let code =
+            currencyCodeRaw?
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+                .uppercased()
+
+        return
+            code?.isEmpty == false
+            ? code!
+            : "CNY"
+    }
+
+
+    var displayOriginalAmount: Double {
+
+        originalAmount ??
+        abs(amount)
+    }
+
 
     var type: TransactionType {
 
