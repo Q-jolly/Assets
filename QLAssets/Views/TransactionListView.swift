@@ -15,6 +15,9 @@ struct TransactionListView:
         case all =
             "全部时间"
 
+        case recent30Days =
+            "近30天"
+
         case thisMonth =
             "本月"
 
@@ -114,7 +117,7 @@ struct TransactionListView:
     @State
     private var dateFilter:
         DateFilter =
-            .all
+            .recent30Days
 
     @State
     private var exportDocument =
@@ -589,27 +592,23 @@ struct TransactionListView:
 
                 } label: {
 
-                    Image(
-                        systemName:
-                            "line.3.horizontal.decrease.circle"
-                    )
-                    .frame(
-                        width:
-                            30,
-                        height:
-                            30
-                    )
-                    // 自绘筛选数量角标。
-                    // 不使用外层 Capsule 内部 overlay，避免被 clipShape 裁剪。
-                    .padding(
-                        4
-                    )
-                    .background {
+                    ZStack(alignment: .topTrailing) {
+                        Image(
+                            systemName:
+                                "line.3.horizontal.decrease.circle"
+                        )
+                        .frame(
+                            width:
+                                30,
+                            height:
+                                30
+                        )
+
                         if activeFilterCount > 0 {
                             Text("\(activeFilterCount)")
                                 .font(
                                     .system(
-                                        size: 9,
+                                        size: 10,
                                         weight: .bold
                                     )
                                 )
@@ -620,16 +619,17 @@ struct TransactionListView:
                                 )
                                 .background(
                                     Circle()
-                                        .fill(Color.red)
+                                        .fill(.red)
                                 )
                                 .offset(
-                                    x: 18,
-                                    y: -12
+                                    x: 10,
+                                    y: -8
                                 )
                                 .allowsHitTesting(false)
-                                .zIndex(20)
+                                .zIndex(999)
                         }
                     }
+                    .compositingGroup()
                 }
             }
         }
@@ -1180,6 +1180,9 @@ struct TransactionListView:
 
 
         switch dateFilter {
+
+        case .recent30Days:
+            return transactionDate >= Calendar.current.date(byAdding: .day, value: -30, to: Date())!
 
         case .all:
 
