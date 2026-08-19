@@ -255,7 +255,10 @@ final class TransactionRecord {
         }
 
         self.category =
-            category
+            CategoryNormalizer
+                .normalized(
+                    category
+                )
 
         self.accountID =
             accountID

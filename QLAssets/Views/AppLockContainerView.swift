@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 
 struct AppLockContainerView:
@@ -12,6 +13,11 @@ struct AppLockContainerView:
     @EnvironmentObject
     private var appLock:
         AppLockManager
+
+    @Environment(
+        \.modelContext
+    )
+    private var modelContext
 
     @State
     private var attemptedInitialUnlock =
@@ -65,6 +71,12 @@ struct AppLockContainerView:
                     .isLocked
         )
         .onAppear {
+
+            CategoryDataMigration
+                .run(
+                    context:
+                        modelContext
+                )
 
             appLock
                 .prepareForLaunch()

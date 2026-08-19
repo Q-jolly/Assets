@@ -202,7 +202,10 @@ enum TransactionService {
         }
 
         transaction.category =
-            category
+            CategoryNormalizer
+                .normalized(
+                    category
+                )
 
         transaction.accountID =
             accountID ??
