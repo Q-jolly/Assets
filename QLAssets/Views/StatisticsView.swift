@@ -986,9 +986,9 @@ struct StatisticsView: View {
     ) {
 
         withAnimation(
-            .snappy(
+            .easeOut(
                 duration:
-                    0.24
+                    0.16
             )
         ) {
 
@@ -1234,6 +1234,62 @@ struct StatisticsView: View {
             }
             .padding()
         }
+        .simultaneousGesture(
+            DragGesture(
+                minimumDistance:
+                    12
+            )
+            .onChanged {
+                _ in
+
+                clearChartFocus()
+            }
+        )
+        .onChange(
+            of:
+                selectedDay
+        ) { _, value in
+
+            if value !=
+                nil {
+
+                selectedTrendMonth =
+                    nil
+
+                selectedCategoryID =
+                    nil
+            }
+        }
+        .onChange(
+            of:
+                selectedTrendMonth
+        ) { _, value in
+
+            if value !=
+                nil {
+
+                selectedDay =
+                    nil
+
+                selectedCategoryID =
+                    nil
+            }
+        }
+        .onChange(
+            of:
+                selectedCategoryID
+        ) { _, value in
+
+            if value !=
+                nil {
+
+                selectedDay =
+                    nil
+
+                selectedTrendMonth =
+                    nil
+            }
+        }
         .navigationTitle(
             "收支统计"
         )
@@ -1262,6 +1318,28 @@ struct StatisticsView: View {
                     expenseCategoryItems
             )
         }
+    }
+
+
+    private func clearChartFocus() {
+
+        guard
+            selectedDay != nil ||
+            selectedTrendMonth != nil ||
+            selectedCategoryID != nil
+        else {
+            return
+        }
+
+
+        selectedDay =
+            nil
+
+        selectedTrendMonth =
+            nil
+
+        selectedCategoryID =
+            nil
     }
 
 
@@ -2167,63 +2245,17 @@ struct StatisticsView: View {
                                 )
                         )
                         .foregroundStyle(
-                            .secondary
+                            Color.accentColor
+                                .opacity(
+                                    0.45
+                                )
                         )
-                        .annotation(
-                            position:
-                                .top,
-                            spacing:
-                                8
-                        ) {
-
-                            VStack(
-                                spacing:
-                                    2
-                            ) {
-
-                                Text(
-                                    selectedDayTitle
-                                )
-                                .font(
-                                    .caption2
-                                )
-                                .foregroundStyle(
-                                    .secondary
-                                )
-
-                                Text(
-                                    point.amount,
-                                    format:
-                                        .currency(
-                                            code:
-                                                "CNY"
-                                        )
-                                )
-                                .font(
-                                    .caption
-                                        .bold()
-                                )
-                            }
-                            .padding(
-                                .horizontal,
-                                9
+                        .lineStyle(
+                            StrokeStyle(
+                                lineWidth:
+                                    1
                             )
-                            .padding(
-                                .vertical,
-                                6
-                            )
-                            .background(
-                                .regularMaterial
-                            )
-                            .clipShape(
-                                RoundedRectangle(
-                                    cornerRadius:
-                                        9,
-                                    style:
-                                        .continuous
-                                )
-                            )
-                        }
+                        )
                     }
                 }
                 .frame(
@@ -2262,79 +2294,88 @@ struct StatisticsView: View {
                             .contentShape(
                                 Rectangle()
                             )
-                            .gesture(
-                                DragGesture(
-                                    minimumDistance:
-                                        0
-                                )
-                                .onEnded {
-                                    value in
+                            .highPriorityGesture(
+                                SpatialTapGesture()
+                                    .onEnded {
+                                        value in
 
-                                    guard
-                                        let plotFrame =
-                                            proxy.plotFrame
-                                    else {
-                                        return
-                                    }
+                                        guard
+                                            let plotFrame =
+                                                proxy.plotFrame
+                                        else {
 
+                                            selectedDay =
+                                                nil
 
-                                    let frame =
-                                        geometry[
-                                            plotFrame
-                                        ]
+                                            return
+                                        }
 
 
-                                    guard
-                                        frame.contains(
-                                            value.location
-                                        )
-                                    else {
-                                        return
-                                    }
+                                        let frame =
+                                            geometry[
+                                                plotFrame
+                                            ]
 
 
-                                    let x =
-                                        value.location.x -
-                                        frame.minX
-
-
-                                    guard
-                                        let rawDate:
-                                            Date =
-                                                proxy.value(
-                                                    atX:
-                                                        x
-                                                ),
-                                        let nearest =
-                                            nearestDailyExpenseDate(
-                                                to:
-                                                    rawDate
+                                        guard
+                                            frame.contains(
+                                                value.location
                                             )
-                                    else {
-                                        return
-                                    }
+                                        else {
+
+                                            selectedDay =
+                                                nil
+
+                                            return
+                                        }
 
 
-                                    if let selectedDay,
-                                       AppTime.calendar
-                                        .isDate(
-                                            selectedDay,
-                                            inSameDayAs:
+                                        let x =
+                                            value.location.x -
+                                            frame.minX
+
+
+                                        guard
+                                            let rawDate:
+                                                Date =
+                                                    proxy.value(
+                                                        atX:
+                                                            x
+                                                    ),
+                                            let nearest =
+                                                nearestDailyExpenseDate(
+                                                    to:
+                                                        rawDate
+                                                )
+                                        else {
+
+                                            selectedDay =
+                                                nil
+
+                                            return
+                                        }
+
+
+                                        if let selectedDay,
+                                           AppTime.calendar
+                                            .isDate(
+                                                selectedDay,
+                                                inSameDayAs:
+                                                    nearest
+                                            ) {
+
+                                            self.selectedDay =
+                                                nil
+
+                                        } else {
+
+                                            self.selectedDay =
                                                 nearest
-                                        ) {
 
-                                        self.selectedDay =
-                                            nil
-
-                                    } else {
-
-                                        self.selectedDay =
-                                            nearest
-
-                                        HapticFeedback
-                                            .selection()
+                                            HapticFeedback
+                                                .selection()
+                                        }
                                     }
-                                }
                             )
                     }
                 }
@@ -2611,12 +2652,84 @@ struct StatisticsView: View {
             spacing: 12
         ) {
 
-            Text(
-                "截至所选月份近 6 个月收支"
-            )
-            .font(
-                .title3.bold()
-            )
+            HStack(
+                alignment:
+                    .firstTextBaseline
+            ) {
+
+                Text(
+                    "截至所选月份近 6 个月收支"
+                )
+                .font(
+                    .title3.bold()
+                )
+
+
+                Spacer()
+
+
+                if selectedTrendMonth !=
+                    nil {
+
+                    Button(
+                        "取消选择"
+                    ) {
+
+                        selectedTrendMonth =
+                            nil
+                    }
+                    .font(
+                        .caption
+                    )
+                }
+            }
+
+
+            if selectedTrendMonth !=
+                nil {
+
+                HStack(
+                    spacing:
+                        12
+                ) {
+
+                    Text(
+                        selectedTrendTitle
+                    )
+                    .font(
+                        .caption
+                            .bold()
+                    )
+
+
+                    Spacer()
+
+
+                    Text(
+                        "收入 \(selectedTrendIncome.formatted(.currency(code: "CNY")))"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .green
+                    )
+
+
+                    Text(
+                        "支出 \(selectedTrendExpense.formatted(.currency(code: "CNY")))"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .blue
+                    )
+                }
+                .contentTransition(
+                    .numericText()
+                )
+            }
 
 
             Chart {
@@ -2680,68 +2793,17 @@ struct StatisticsView: View {
                             )
                     )
                     .foregroundStyle(
-                        .secondary
+                        Color.accentColor
+                            .opacity(
+                                0.45
+                            )
                     )
-                    .annotation(
-                        position:
-                            .top,
-                        spacing:
-                            8
-                    ) {
-
-                        VStack(
-                            alignment:
-                                .leading,
-                            spacing:
-                                3
-                        ) {
-
-                            Text(
-                                selectedTrendTitle
-                            )
-                            .font(
-                                .caption2
-                            )
-                            .foregroundStyle(
-                                .secondary
-                            )
-
-                            Text(
-                                "收入 \(selectedTrendIncome.formatted(.currency(code: "CNY")))"
-                            )
-                            .font(
-                                .caption
-                                    .bold()
-                            )
-
-                            Text(
-                                "支出 \(selectedTrendExpense.formatted(.currency(code: "CNY")))"
-                            )
-                            .font(
-                                .caption
-                                    .bold()
-                            )
-                        }
-                        .padding(
-                            .horizontal,
-                            9
+                    .lineStyle(
+                        StrokeStyle(
+                            lineWidth:
+                                1
                         )
-                        .padding(
-                            .vertical,
-                            6
-                        )
-                        .background(
-                            .regularMaterial
-                        )
-                        .clipShape(
-                            RoundedRectangle(
-                                cornerRadius:
-                                    9,
-                                style:
-                                    .continuous
-                            )
-                        )
-                    }
+                    )
                 }
             }
             .frame(
@@ -2786,81 +2848,90 @@ struct StatisticsView: View {
                         .contentShape(
                             Rectangle()
                         )
-                        .gesture(
-                            DragGesture(
-                                minimumDistance:
-                                    0
-                            )
-                            .onEnded {
-                                value in
+                        .highPriorityGesture(
+                            SpatialTapGesture()
+                                .onEnded {
+                                    value in
 
-                                guard
-                                    let plotFrame =
-                                        proxy.plotFrame
-                                else {
-                                    return
-                                }
+                                    guard
+                                        let plotFrame =
+                                            proxy.plotFrame
+                                    else {
 
+                                        selectedTrendMonth =
+                                            nil
 
-                                let frame =
-                                    geometry[
-                                        plotFrame
-                                    ]
+                                        return
+                                    }
 
 
-                                guard
-                                    frame.contains(
-                                        value.location
-                                    )
-                                else {
-                                    return
-                                }
+                                    let frame =
+                                        geometry[
+                                            plotFrame
+                                        ]
 
 
-                                let x =
-                                    value.location.x -
-                                    frame.minX
-
-
-                                guard
-                                    let rawDate:
-                                        Date =
-                                            proxy.value(
-                                                atX:
-                                                    x
-                                            ),
-                                    let nearest =
-                                        nearestTrendMonth(
-                                            to:
-                                                rawDate
+                                    guard
+                                        frame.contains(
+                                            value.location
                                         )
-                                else {
-                                    return
+                                    else {
+
+                                        selectedTrendMonth =
+                                            nil
+
+                                        return
+                                    }
+
+
+                                    let x =
+                                        value.location.x -
+                                        frame.minX
+
+
+                                    guard
+                                        let rawDate:
+                                            Date =
+                                                proxy.value(
+                                                    atX:
+                                                        x
+                                                ),
+                                        let nearest =
+                                            nearestTrendMonth(
+                                                to:
+                                                    rawDate
+                                            )
+                                    else {
+
+                                        selectedTrendMonth =
+                                            nil
+
+                                        return
+                                    }
+
+
+                                    if let selectedTrendMonth,
+                                       AppTime.calendar
+                                        .isDate(
+                                            selectedTrendMonth,
+                                            equalTo:
+                                                nearest,
+                                            toGranularity:
+                                                .month
+                                        ) {
+
+                                        self.selectedTrendMonth =
+                                            nil
+
+                                    } else {
+
+                                        self.selectedTrendMonth =
+                                            nearest
+
+                                        HapticFeedback
+                                            .selection()
+                                    }
                                 }
-
-
-                                if let selectedTrendMonth,
-                                   AppTime.calendar
-                                    .isDate(
-                                        selectedTrendMonth,
-                                        equalTo:
-                                            nearest,
-                                        toGranularity:
-                                            .month
-                                    ) {
-
-                                    self.selectedTrendMonth =
-                                        nil
-
-                                } else {
-
-                                    self.selectedTrendMonth =
-                                        nearest
-
-                                    HapticFeedback
-                                        .selection()
-                                }
-                            }
                         )
                 }
             }
@@ -3615,18 +3686,7 @@ private struct CategoryDonutBreakdownView: View {
             ZStack {
 
                 // 扇区、中心白圆、中心文字和 callout 计算必须共享同一个 center。
-                // 不依赖 UIScreen / 固定机型尺寸，GeometryReader 尺寸变化时同步适配。
-                // 点击圆环之外的空白区域，视为失去焦点。
-                Color.clear
-                    .contentShape(
-                        Rectangle()
-                    )
-                    .onTapGesture {
-
-                        clearSelection()
-                    }
-
-
+                // 点击命中不再交给各层 Shape，而是在 ZStack 最外层做一次极坐标判断。
                 ForEach(
                     points
                 ) { point in
@@ -3974,94 +4034,6 @@ private struct CategoryDonutBreakdownView: View {
                 }
 
 
-                // 交互命中层始终放在视觉内容最上方。
-                // 使用几乎透明的扇区填充，而不是依赖下层视觉 Shape 的 hit testing，
-                // 避免 ScrollView、callout 高 zIndex、选中缩放等因素吞掉点击。
-                ForEach(
-                    points
-                ) { point in
-
-                    DonutSliceShape(
-                        startAngle:
-                            point.startAngle,
-                        endAngle:
-                            point.endAngle,
-                        innerRadiusRatio:
-                            innerRadius /
-                            outerRadius
-                    )
-                    .fill(
-                        Color.white
-                            .opacity(
-                                0.001
-                            )
-                    )
-                    .frame(
-                        width:
-                            outerRadius *
-                            2,
-                        height:
-                            outerRadius *
-                            2
-                    )
-                    .position(
-                        center
-                    )
-                    .contentShape(
-                        DonutSliceShape(
-                            startAngle:
-                                point.startAngle,
-                            endAngle:
-                                point.endAngle,
-                            innerRadiusRatio:
-                                innerRadius /
-                                outerRadius
-                        )
-                    )
-                    .onTapGesture {
-
-                        toggleSelection(
-                            point.id
-                        )
-
-                        HapticFeedback
-                            .selection()
-                    }
-                    .zIndex(
-                        20
-                    )
-                }
-
-
-                // 中心白圆单独覆盖在命中层之上，点击中心取消选择。
-                Circle()
-                    .fill(
-                        Color.white
-                            .opacity(
-                                0.001
-                            )
-                    )
-                    .frame(
-                        width:
-                            innerRadius *
-                            2,
-                        height:
-                            innerRadius *
-                            2
-                    )
-                    .position(
-                        center
-                    )
-                    .contentShape(
-                        Circle()
-                    )
-                    .onTapGesture {
-
-                        clearSelection()
-                    }
-                    .zIndex(
-                        21
-                    )
             }
             .frame(
                 maxWidth:
@@ -4069,10 +4041,30 @@ private struct CategoryDonutBreakdownView: View {
                 maxHeight:
                     .infinity
             )
+            .contentShape(
+                Rectangle()
+            )
+            .highPriorityGesture(
+                SpatialTapGesture()
+                    .onEnded {
+                        value in
+
+                        handleDonutTap(
+                            at:
+                                value.location,
+                            center:
+                                center,
+                            innerRadius:
+                                innerRadius,
+                            outerRadius:
+                                outerRadius
+                        )
+                    }
+            )
             .animation(
                 .snappy(
                     duration:
-                        0.24
+                        0.18
                 ),
                 value:
                     selectedCategoryID
@@ -4165,15 +4157,103 @@ private struct CategoryDonutBreakdownView: View {
     }
 
 
+    private func handleDonutTap(
+        at location:
+            CGPoint,
+        center:
+            CGPoint,
+        innerRadius:
+            CGFloat,
+        outerRadius:
+            CGFloat
+    ) {
+
+        let dx =
+            location.x -
+            center.x
+
+        let dy =
+            location.y -
+            center.y
+
+        let distance =
+            sqrt(
+                dx *
+                dx +
+                dy *
+                dy
+            )
+
+
+        // 点中心或圆环外白色区域：失去焦点并恢复默认状态。
+        guard
+            distance >=
+                innerRadius,
+            distance <=
+                outerRadius +
+                18
+        else {
+
+            clearSelection()
+
+            return
+        }
+
+
+        var degrees =
+            atan2(
+                dy,
+                dx
+            ) *
+            180 /
+            .pi
+
+
+        // 扇区数据从 -90°（12 点方向）开始，一直到 270°。
+        if degrees <
+            -90 {
+
+            degrees +=
+                360
+        }
+
+
+        guard
+            let point =
+                points.first(
+                    where: {
+                        degrees >=
+                            $0.startAngle.degrees &&
+                        degrees <
+                            $0.endAngle.degrees
+                    }
+                )
+        else {
+
+            clearSelection()
+
+            return
+        }
+
+
+        toggleSelection(
+            point.id
+        )
+
+        HapticFeedback
+            .selection()
+    }
+
+
     private func toggleSelection(
         _ categoryID:
             String
     ) {
 
         withAnimation(
-            .snappy(
+            .easeOut(
                 duration:
-                    0.24
+                    0.16
             )
         ) {
 
