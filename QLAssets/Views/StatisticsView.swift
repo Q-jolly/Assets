@@ -1781,7 +1781,7 @@ struct StatisticsView: View {
                         $selectedCategoryID
                 )
                 .frame(
-                    height: 350
+                    height: 390
                 )
 
 
@@ -2651,7 +2651,7 @@ private struct CategoryDonutBreakdownView: View {
                     y:
                         height /
                         2 +
-                        15
+                        25
                 )
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
@@ -3235,6 +3235,9 @@ private struct CategoryDonutBreakdownView: View {
         }
 
 
+        var topClusterIndex =
+            0
+
         let rawSeeds =
             points.map { point in
 
@@ -3242,10 +3245,42 @@ private struct CategoryDonutBreakdownView: View {
                     point.midAngle
                         .radians
 
-                let isRightSide =
+                let cosine =
                     cos(
                         radians
-                    ) >= 0
+                    )
+
+                let sine =
+                    sin(
+                        radians
+                    )
+
+                let isTopCluster =
+                    sine <
+                    -0.90
+
+                let isRightSide:
+                    Bool
+
+                if isTopCluster {
+
+                    // 接近 12 点方向时左右没有强几何偏好。
+                    // 交替分流可避免“买菜 / 其他 / 娱乐”
+                    // 全部叠在同一侧同一高度。
+                    isRightSide =
+                        topClusterIndex %
+                        2 ==
+                        1
+
+                    topClusterIndex +=
+                        1
+
+                } else {
+
+                    isRightSide =
+                        cosine >=
+                        0
+                }
 
                 let start =
                     CGPoint(
@@ -3383,10 +3418,10 @@ private struct CategoryDonutBreakdownView: View {
 
         let topLimit =
             max(
-                32,
+                30,
                 center.y -
                 outerRadius -
-                46
+                70
             )
 
         let bottomLimit =
@@ -3399,7 +3434,7 @@ private struct CategoryDonutBreakdownView: View {
             )
 
         let minimumGap:
-            CGFloat = 34
+            CGFloat = 28
 
 
         let leftAdjusted =
