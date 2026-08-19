@@ -612,6 +612,80 @@ struct StatisticsView: View {
     }
 
 
+    private func nearestDailyExpenseDate(
+        to date:
+            Date
+    ) -> Date? {
+
+        dailyExpensePoints
+            .min {
+                lhs,
+                rhs in
+
+                abs(
+                    lhs.date
+                        .timeIntervalSince(
+                            date
+                        )
+                ) <
+                abs(
+                    rhs.date
+                        .timeIntervalSince(
+                            date
+                        )
+                )
+            }?
+            .date
+    }
+
+
+    private func nearestTrendMonth(
+        to date:
+            Date
+    ) -> Date? {
+
+        let months =
+            Dictionary(
+                grouping:
+                    sixMonthFlowPoints,
+                by: {
+                    AppTime.calendar
+                        .date(
+                            from:
+                                AppTime.calendar
+                                    .dateComponents(
+                                        [
+                                            .year,
+                                            .month
+                                        ],
+                                        from:
+                                            $0.month
+                                    )
+                        ) ??
+                    $0.month
+                }
+            )
+            .keys
+
+
+        return months.min {
+            lhs,
+                rhs in
+
+            abs(
+                lhs.timeIntervalSince(
+                    date
+                )
+            ) <
+            abs(
+                rhs.timeIntervalSince(
+                    date
+                )
+            )
+        }
+    }
+
+
     private var selectedDayTransactions:
         [TransactionRecord] {
 
@@ -2175,20 +2249,93 @@ struct StatisticsView: View {
                         )
                     }
                 }
-                .chartXSelection(
-                    value:
-                        $selectedDay
-                )
-                .onChange(
-                    of:
-                        selectedDay
-                ) { _, value in
+                .chartOverlay {
+                    proxy in
 
-                    if value !=
-                        nil {
+                    GeometryReader {
+                        geometry in
 
-                        HapticFeedback
-                            .selection()
+                        Rectangle()
+                            .fill(
+                                Color.clear
+                            )
+                            .contentShape(
+                                Rectangle()
+                            )
+                            .gesture(
+                                DragGesture(
+                                    minimumDistance:
+                                        0
+                                )
+                                .onEnded {
+                                    value in
+
+                                    guard
+                                        let plotFrame =
+                                            proxy.plotFrame
+                                    else {
+                                        return
+                                    }
+
+
+                                    let frame =
+                                        geometry[
+                                            plotFrame
+                                        ]
+
+
+                                    guard
+                                        frame.contains(
+                                            value.location
+                                        )
+                                    else {
+                                        return
+                                    }
+
+
+                                    let x =
+                                        value.location.x -
+                                        frame.minX
+
+
+                                    guard
+                                        let rawDate:
+                                            Date =
+                                                proxy.value(
+                                                    atX:
+                                                        x
+                                                ),
+                                        let nearest =
+                                            nearestDailyExpenseDate(
+                                                to:
+                                                    rawDate
+                                            )
+                                    else {
+                                        return
+                                    }
+
+
+                                    if let selectedDay,
+                                       AppTime.calendar
+                                        .isDate(
+                                            selectedDay,
+                                            inSameDayAs:
+                                                nearest
+                                        ) {
+
+                                        self.selectedDay =
+                                            nil
+
+                                    } else {
+
+                                        self.selectedDay =
+                                            nearest
+
+                                        HapticFeedback
+                                            .selection()
+                                    }
+                                }
+                            )
                     }
                 }
 
@@ -2626,20 +2773,95 @@ struct StatisticsView: View {
                 alignment:
                     .leading
             )
-            .chartXSelection(
-                value:
-                    $selectedTrendMonth
-            )
-            .onChange(
-                of:
-                    selectedTrendMonth
-            ) { _, value in
+            .chartOverlay {
+                proxy in
 
-                if value !=
-                    nil {
+                GeometryReader {
+                    geometry in
 
-                    HapticFeedback
-                        .selection()
+                    Rectangle()
+                        .fill(
+                            Color.clear
+                        )
+                        .contentShape(
+                            Rectangle()
+                        )
+                        .gesture(
+                            DragGesture(
+                                minimumDistance:
+                                    0
+                            )
+                            .onEnded {
+                                value in
+
+                                guard
+                                    let plotFrame =
+                                        proxy.plotFrame
+                                else {
+                                    return
+                                }
+
+
+                                let frame =
+                                    geometry[
+                                        plotFrame
+                                    ]
+
+
+                                guard
+                                    frame.contains(
+                                        value.location
+                                    )
+                                else {
+                                    return
+                                }
+
+
+                                let x =
+                                    value.location.x -
+                                    frame.minX
+
+
+                                guard
+                                    let rawDate:
+                                        Date =
+                                            proxy.value(
+                                                atX:
+                                                    x
+                                            ),
+                                    let nearest =
+                                        nearestTrendMonth(
+                                            to:
+                                                rawDate
+                                        )
+                                else {
+                                    return
+                                }
+
+
+                                if let selectedTrendMonth,
+                                   AppTime.calendar
+                                    .isDate(
+                                        selectedTrendMonth,
+                                        equalTo:
+                                            nearest,
+                                        toGranularity:
+                                            .month
+                                    ) {
+
+                                    self.selectedTrendMonth =
+                                        nil
+
+                                } else {
+
+                                    self.selectedTrendMonth =
+                                        nearest
+
+                                    HapticFeedback
+                                        .selection()
+                                }
+                            }
+                        )
                 }
             }
         }
@@ -3498,12 +3720,9 @@ private struct CategoryDonutBreakdownView: View {
                                 outerRadius
                         )
                     )
-                    .onTapGesture {
-
-                        toggleSelection(
-                            point.id
-                        )
-                    }
+                    .allowsHitTesting(
+                        false
+                    )
                     .accessibilityLabel(
                         point.accessibilityText
                     )
@@ -3540,10 +3759,9 @@ private struct CategoryDonutBreakdownView: View {
                     .contentShape(
                         Circle()
                     )
-                    .onTapGesture {
-
-                        clearSelection()
-                    }
+                    .allowsHitTesting(
+                        false
+                    )
                     .zIndex(4)
 
 
@@ -3754,6 +3972,96 @@ private struct CategoryDonutBreakdownView: View {
                         )
                     }
                 }
+
+
+                // 交互命中层始终放在视觉内容最上方。
+                // 使用几乎透明的扇区填充，而不是依赖下层视觉 Shape 的 hit testing，
+                // 避免 ScrollView、callout 高 zIndex、选中缩放等因素吞掉点击。
+                ForEach(
+                    points
+                ) { point in
+
+                    DonutSliceShape(
+                        startAngle:
+                            point.startAngle,
+                        endAngle:
+                            point.endAngle,
+                        innerRadiusRatio:
+                            innerRadius /
+                            outerRadius
+                    )
+                    .fill(
+                        Color.white
+                            .opacity(
+                                0.001
+                            )
+                    )
+                    .frame(
+                        width:
+                            outerRadius *
+                            2,
+                        height:
+                            outerRadius *
+                            2
+                    )
+                    .position(
+                        center
+                    )
+                    .contentShape(
+                        DonutSliceShape(
+                            startAngle:
+                                point.startAngle,
+                            endAngle:
+                                point.endAngle,
+                            innerRadiusRatio:
+                                innerRadius /
+                                outerRadius
+                        )
+                    )
+                    .onTapGesture {
+
+                        toggleSelection(
+                            point.id
+                        )
+
+                        HapticFeedback
+                            .selection()
+                    }
+                    .zIndex(
+                        20
+                    )
+                }
+
+
+                // 中心白圆单独覆盖在命中层之上，点击中心取消选择。
+                Circle()
+                    .fill(
+                        Color.white
+                            .opacity(
+                                0.001
+                            )
+                    )
+                    .frame(
+                        width:
+                            innerRadius *
+                            2,
+                        height:
+                            innerRadius *
+                            2
+                    )
+                    .position(
+                        center
+                    )
+                    .contentShape(
+                        Circle()
+                    )
+                    .onTapGesture {
+
+                        clearSelection()
+                    }
+                    .zIndex(
+                        21
+                    )
             }
             .frame(
                 maxWidth:
