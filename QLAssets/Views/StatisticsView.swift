@@ -2845,6 +2845,9 @@ private struct CategoryDonutBreakdownView: View {
                     )
 
 
+                // Callout 必须位于扇区之上。
+                // 扇区自身 zIndex 为 1/3，中心层为 4/5；
+                // 引线/圆点/标签使用 7~11，避免初始状态被不透明扇区遮住。
                 ForEach(
                     points
                 ) { point in
@@ -2899,6 +2902,11 @@ private struct CategoryDonutBreakdownView: View {
                                         .round
                                 )
                         )
+                        .zIndex(
+                            isSelected
+                            ? 9
+                            : 7
+                        )
 
 
                         Circle()
@@ -2917,6 +2925,11 @@ private struct CategoryDonutBreakdownView: View {
                             )
                             .position(
                                 layout.start
+                            )
+                            .zIndex(
+                                isSelected
+                                ? 10
+                                : 8
                             )
 
 
@@ -2991,6 +3004,11 @@ private struct CategoryDonutBreakdownView: View {
                         )
                         .allowsHitTesting(
                             false
+                        )
+                        .zIndex(
+                            isSelected
+                            ? 11
+                            : 9
                         )
                     }
                 }
@@ -3236,16 +3254,16 @@ private struct CategoryDonutBreakdownView: View {
 
 
         let sidePadding:
-            CGFloat = 18
+            CGFloat = 12
 
         let labelInsetFromLineEnd:
             CGFloat = 6
 
         let horizontalSegmentLength:
-            CGFloat = 46
+            CGFloat = 58
 
         let outerElbowGap:
-            CGFloat = 18
+            CGFloat = 22
 
         let rawLayouts =
             rawSeeds.map { seed in
@@ -3632,7 +3650,7 @@ private struct CategoryDonutBreakdownView: View {
 
         // 水平段必须有足够可见长度。
         let minimumHorizontalLength:
-            CGFloat = 34
+            CGFloat = 44
 
         let labelGap:
             CGFloat = 7
