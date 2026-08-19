@@ -599,54 +599,37 @@ struct TransactionListView:
                         height:
                             30
                     )
-                    .overlay(
-                        alignment:
-                            .topTrailing
-                    ) {
-
-                        if activeFilterCount >
-                            0 {
-
-                            Text(
-                                "\(activeFilterCount)"
-                            )
-                            .font(
-                                .system(
-                                    size:
-                                        9,
-                                    weight:
-                                        .bold
-                                )
-                            )
-                            .foregroundStyle(
-                                .white
-                            )
-                            .frame(
-                                width:
-                                    18,
-                                height:
-                                    18
-                            )
-                            .background(
-                                Circle()
-                                    .fill(
-                                        Color.red
-                                    )
-                            )
-                            .clipShape(
-                                Circle()
-                            )
-                            .offset(
-                                x:
-                                    8,
-                                y:
-                                    -8
-                            )
-                        }
-                    }
+                    // 自绘筛选数量角标。
+                    // 不使用外层 Capsule 内部 overlay，避免被 clipShape 裁剪。
                     .padding(
                         4
                     )
+                    .background {
+                        if activeFilterCount > 0 {
+                            Text("\(activeFilterCount)")
+                                .font(
+                                    .system(
+                                        size: 9,
+                                        weight: .bold
+                                    )
+                                )
+                                .foregroundStyle(.white)
+                                .frame(
+                                    width: 18,
+                                    height: 18
+                                )
+                                .background(
+                                    Circle()
+                                        .fill(Color.red)
+                                )
+                                .offset(
+                                    x: 18,
+                                    y: -12
+                                )
+                                .allowsHitTesting(false)
+                                .zIndex(20)
+                        }
+                    }
                 }
             }
         }
