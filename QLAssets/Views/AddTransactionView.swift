@@ -192,6 +192,31 @@ struct AddTransactionView: View {
     }
 
 
+    private var creditCardIDs:
+        [UUID] {
+
+        creditCards.map(
+            \.id
+        )
+    }
+
+
+    private var exchangeRateRefreshKey:
+        String {
+
+        [
+            currencyCode,
+            selectedSourceAccount?.currencyCode ?? "",
+            selectedTargetAccount?.currencyCode ?? "",
+            selectedCreditCard?.bankName ?? ""
+        ]
+        .joined(
+            separator:
+                "|"
+        )
+    }
+
+
     private var transactionType:
         TransactionType {
 
@@ -267,59 +292,38 @@ struct AddTransactionView: View {
         }
         .onAppear {
 
-            ensureDefaults()
-
-            if !dateWasManuallyEdited {
-
-                date =
-                    Date()
-            }
-
-            synchronizeCurrencyWithCurrentContext()
+            handleAppear()
         }
         .task {
 
-            while !Task.isCancelled {
-
-                if !dateWasManuallyEdited {
-
-                    await MainActor.run {
-
-                        date =
-                            Date()
-                    }
-                }
-
-
-                try? await Task.sleep(
-                    for:
-                        .seconds(15)
-                )
-            }
+            await runClockRefreshLoop()
         }
         .task(
             id:
-                currencyCode +
-                (selectedSourceAccount?.currencyCode ?? "") +
-                (selectedTargetAccount?.currencyCode ?? "") +
-                (selectedCreditCard?.bankName ?? "")
+                exchangeRateRefreshKey
         ) {
 
             await refreshExchangeRatesIfNeeded()
         }
         .onChange(
-            of: mode
-        ) { _ in
+            of:
+                mode
+        ) { _, _ in
 
             updateForModeChange()
         }
         .onChange(
-            of: creditAction
-        ) { _ in
+            of:
+                creditAction
+        ) { _, _ in
 
             updateForCreditActionChange()
         }
-        .onChange(of: sourceAccountID) { _, _ in
+        .onChange(
+            of:
+                sourceAccountID
+        ) { _, _ in
+
             handleSourceAccountChange()
         }
         .onChange(
@@ -327,37 +331,26 @@ struct AddTransactionView: View {
                 currencyCode
         ) { _, _ in
 
-            exchangeRateMessage =
-                nil
+            handleCurrencyCodeChange()
         }
         .onChange(
-            of: creditCards.map(\.id)
-        ) { _ in
+            of:
+                creditCardIDs
+        ) { _, _ in
 
-            if selectedCreditCardID ==
-                nil ||
-               !creditCards.contains(
-                    where: {
-                        $0.id ==
-                            selectedCreditCardID
-                    }
-               ) {
-
-                selectedCreditCardID =
-                    creditCards.first?.id
-            }
+            handleCreditCardsChange()
         }
         .onChange(
             of:
                 expenseCategoriesStored
-        ) { _ in
+        ) { _, _ in
 
             ensureValidCategory()
         }
         .onChange(
             of:
                 incomeCategoriesStored
-        ) { _ in
+        ) { _, _ in
 
             ensureValidCategory()
         }
@@ -1402,13 +1395,103 @@ struct AddTransactionView: View {
     }
 
 
-    private func handleSourceAccountChange() {
-        guard mode == .transfer else {
-            return
+    private func handleAppear() {
+
+        ensureDefaults()
+
+
+        if !dateWasManuallyEdited {
+
+            date =
+                Date()
         }
+
 
         synchronizeCurrencyWithCurrentContext()
     }
+
+
+    @MainActor
+    private func runClockRefreshLoop() async {
+
+        while !Task.isCancelled {
+
+            if !dateWasManuallyEdited {
+
+                date =
+                    Date()
+            }
+
+
+            try? await Task.sleep(
+                for:
+                    .seconds(15)
+            )
+        }
+    }
+
+
+    private func handleSourceAccountChange() {
+
+        guard mode ==
+            .transfer
+        else {
+            return
+        }
+
+
+        synchronizeCurrencyWithCurrentContext()
+    }
+
+
+    private func handleCurrencyCodeChange() {
+
+        exchangeRateMessage =
+            nil
+    }
+
+
+    private func handleCreditCardsChange() {
+
+        guard
+            !creditCards.isEmpty
+        else {
+
+            selectedCreditCardID =
+                nil
+
+            return
+        }
+
+
+        guard
+            let currentID =
+                selectedCreditCardID
+        else {
+
+            selectedCreditCardID =
+                creditCards.first?.id
+
+            return
+        }
+
+
+        let stillExists =
+            creditCards.contains {
+                card in
+
+                card.id ==
+                    currentID
+            }
+
+
+        if !stillExists {
+
+            selectedCreditCardID =
+                creditCards.first?.id
+        }
+    }
+
 
     private func updateForModeChange() {
 
