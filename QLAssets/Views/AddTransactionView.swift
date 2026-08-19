@@ -224,458 +224,21 @@ struct AddTransactionView: View {
 
         Form {
 
-            Section {
+            entryTypeSection
 
-                Picker(
-                    "类型",
-                    selection:
-                        $mode
-                ) {
+            amountSection
 
-                    ForEach(
-                        EntryMode.allCases
-                    ) { item in
+            categorySection
 
-                        Text(
-                            item.rawValue
-                        )
-                        .tag(item)
-                    }
-                }
-                .pickerStyle(
-                    .segmented
-                )
+            creditCardSection
 
+            sourceAccountSection
 
-                if mode ==
-                    .creditCard {
+            targetAccountSection
 
-                    Picker(
-                        "信用卡操作",
-                        selection:
-                            $creditAction
-                    ) {
+            otherSection
 
-                        ForEach(
-                            CreditAction.allCases
-                        ) { action in
-
-                            Text(
-                                action.rawValue
-                            )
-                            .tag(action)
-                        }
-                    }
-                    .pickerStyle(
-                        .segmented
-                    )
-                }
-            }
-
-
-            Section("金额") {
-
-                HStack {
-
-                    Text(
-                        CurrencyCatalog
-                            .symbol(
-                                for:
-                                    currencyCode
-                            )
-                    )
-                    .font(
-                        .title2
-                    )
-                    .foregroundStyle(
-                        .secondary
-                    )
-
-                    TextField(
-                        "0.00",
-                        text:
-                            $amountText
-                    )
-                    .keyboardType(
-                        .decimalPad
-                    )
-                    .focused(
-                        $isAmountFocused
-                    )
-                    .font(
-                        .title2.bold()
-                    )
-
-
-                    Picker(
-                        "币种",
-                        selection:
-                            $currencyCode
-                    ) {
-
-                        ForEach(
-                            CurrencyCatalog
-                                .supported
-                        ) { currency in
-
-                            Text(
-                                currency.code
-                            )
-                            .tag(
-                                currency.code
-                            )
-                        }
-                    }
-                    .labelsHidden()
-                    .disabled(
-                        transactionType ==
-                            .creditRepayment ||
-                        transactionType ==
-                            .adjustment
-                    )
-                }
-
-
-                if currencyCode !=
-                    "CNY" {
-
-                    if let converted =
-                        cnyAmount {
-
-                        LabeledContent(
-                            "人民币估值"
-                        ) {
-
-                            Text(
-                                cnyEstimateText(
-                                    converted
-                                )
-                            )
-                            .fontWeight(
-                                .semibold
-                            )
-                        }
-                    }
-
-
-                    if let rate =
-                        selectedCurrencyRate {
-
-                        Text(
-                            exchangeRateSummaryText(
-                                rate:
-                                    rate
-                            )
-                        )
-                        .font(
-                            .caption
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-
-                    } else if isRefreshingRate {
-
-                        Label(
-                            "正在查询银行实时汇率…",
-                            systemImage:
-                                "arrow.triangle.2.circlepath"
-                        )
-                        .font(
-                            .caption
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-                    }
-
-
-                    if let exchangeRateMessage {
-
-                        Text(
-                            exchangeRateMessage
-                        )
-                        .font(
-                            .caption
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-                    }
-                }
-            }
-
-
-            if showsCategory {
-
-                Section {
-
-                    Picker(
-                        "分类",
-                        selection:
-                            $category
-                    ) {
-
-                        ForEach(
-                            currentCategoryItems
-                        ) { item in
-
-                            Label(
-                                item.name,
-                                systemImage:
-                                    item.icon
-                            )
-                            .tag(
-                                item.name
-                            )
-                        }
-                    }
-
-
-                    NavigationLink {
-
-                        CategoryManagerView()
-
-                    } label: {
-
-                        Label(
-                            "管理分类",
-                            systemImage:
-                                "square.grid.2x2"
-                        )
-                    }
-
-                } header: {
-
-                    Text(
-                        "分类"
-                    )
-                }
-            }
-
-
-            if mode ==
-                .creditCard {
-
-                Section("信用卡") {
-
-                    if creditCards.isEmpty {
-
-                        Label(
-                            "还没有信用卡，请先到卡包添加",
-                            systemImage:
-                                "creditcard"
-                        )
-                        .foregroundStyle(
-                            .secondary
-                        )
-
-                    } else {
-
-                        Picker(
-                            "选择信用卡",
-                            selection:
-                                $selectedCreditCardID
-                        ) {
-
-                            Text("请选择")
-                                .tag(
-                                    UUID?.none
-                                )
-
-                            ForEach(
-                                creditCards
-                            ) { card in
-
-                                Text(
-                                    "\(card.bankName) •••• \(card.lastFourDigits)"
-                                )
-                                .tag(
-                                    Optional(
-                                        card.id
-                                    )
-                                )
-                            }
-                        }
-
-
-                        if let card =
-                            selectedCreditCard {
-
-                            LabeledContent(
-                                "当前欠款"
-                            ) {
-
-                                Text(
-                                    CreditAccountService
-                                        .sharedDebt(
-                                            for:
-                                                card,
-                                            cards:
-                                                cards
-                                        ),
-                                    format:
-                                        .currency(
-                                            code:
-                                                "CNY"
-                                        )
-                                )
-                                .fontWeight(
-                                    .semibold
-                                )
-                            }
-
-
-                            if let available =
-                                CreditAccountService
-                                    .availableCredit(
-                                        for:
-                                            card,
-                                        cards:
-                                            cards
-                                    ) {
-
-                                LabeledContent(
-                                    "可用额度"
-                                ) {
-
-                                    Text(
-                                        available,
-                                        format:
-                                            .currency(
-                                                code:
-                                                    "CNY"
-                                            )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-
-            if showsSourceAccount {
-
-                Section(
-                    sourceSectionTitle
-                ) {
-
-                    Picker(
-                        "选择账户",
-                        selection:
-                            $sourceAccountID
-                    ) {
-
-                        Text("请选择")
-                            .tag(
-                                UUID?.none
-                            )
-
-                        ForEach(
-                            accounts
-                        ) { account in
-
-                            Text(
-                                accountPickerLabel(
-                                    account
-                                )
-                            )
-                            .tag(
-                                Optional(
-                                    account.id
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-
-            if mode ==
-                .transfer {
-
-                Section("转入账户") {
-
-                    Picker(
-                        "选择账户",
-                        selection:
-                            $targetAccountID
-                    ) {
-
-                        Text("请选择")
-                            .tag(
-                                UUID?.none
-                            )
-
-                        ForEach(
-                            accounts
-                        ) { account in
-
-                            Text(
-                                account.name
-                            )
-                            .tag(
-                                Optional(
-                                    account.id
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-
-            Section("其他") {
-
-                DatePicker(
-                    "日期",
-                    selection:
-                        Binding(
-                            get: {
-                                date
-                            },
-                            set: {
-                                newValue in
-
-                                date =
-                                    newValue
-
-                                dateWasManuallyEdited =
-                                    true
-                            }
-                        )
-                )
-
-                TextField(
-                    "备注（可选）",
-                    text:
-                        $note
-                )
-            }
-
-
-            Section {
-
-                Button {
-
-                    saveTransaction()
-
-                } label: {
-
-                    Text("保存")
-                        .frame(
-                            maxWidth:
-                                .infinity
-                        )
-                        .fontWeight(
-                            .semibold
-                        )
-                }
-                .disabled(
-                    !canSave
-                )
-            }
+            saveSection
         }
         .scrollDismissesKeyboard(
             .interactively
@@ -837,6 +400,529 @@ struct AddTransactionView: View {
     }
 
 
+    // MARK: - 记账表单分区
+    //
+    // 这些 Section 原来全部堆在 body 的同一个 Form ViewBuilder 中。
+    // Xcode Release + Whole Module Optimization 会在复杂 Picker / 条件视图处
+    // 出现 “unable to type-check in reasonable time”。
+    // 拆开后每个分区单独推导类型，功能和界面保持不变。
+
+    @ViewBuilder
+    private var entryTypeSection:
+        some View {
+
+        Section {
+
+            Picker(
+                "类型",
+                selection:
+                    $mode
+            ) {
+
+                ForEach(
+                    EntryMode.allCases
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+            .pickerStyle(
+                .segmented
+            )
+
+
+            if mode ==
+                .creditCard {
+
+                Picker(
+                    "信用卡操作",
+                    selection:
+                        $creditAction
+                ) {
+
+                    ForEach(
+                        CreditAction.allCases
+                    ) { action in
+
+                        Text(
+                            action.rawValue
+                        )
+                        .tag(
+                            action
+                        )
+                    }
+                }
+                .pickerStyle(
+                    .segmented
+                )
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var amountSection:
+        some View {
+
+        Section(
+            "金额"
+        ) {
+
+            HStack {
+
+                Text(
+                    CurrencyCatalog
+                        .symbol(
+                            for:
+                                currencyCode
+                        )
+                )
+                .font(
+                    .title2
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+
+                TextField(
+                    "0.00",
+                    text:
+                        $amountText
+                )
+                .keyboardType(
+                    .decimalPad
+                )
+                .focused(
+                    $isAmountFocused
+                )
+                .font(
+                    .title2.bold()
+                )
+
+
+                Picker(
+                    "币种",
+                    selection:
+                        $currencyCode
+                ) {
+
+                    ForEach(
+                        CurrencyCatalog
+                            .supported
+                    ) { currency in
+
+                        Text(
+                            currency.code
+                        )
+                        .tag(
+                            currency.code
+                        )
+                    }
+                }
+                .labelsHidden()
+                .disabled(
+                    transactionType ==
+                        .creditRepayment ||
+                    transactionType ==
+                        .adjustment
+                )
+            }
+
+
+            if currencyCode !=
+                "CNY" {
+
+                foreignCurrencyInfo
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var foreignCurrencyInfo:
+        some View {
+
+        if let converted =
+            cnyAmount {
+
+            LabeledContent(
+                "人民币估值"
+            ) {
+
+                Text(
+                    cnyEstimateText(
+                        converted
+                    )
+                )
+                .fontWeight(
+                    .semibold
+                )
+            }
+        }
+
+
+        if let rate =
+            selectedCurrencyRate {
+
+            Text(
+                exchangeRateSummaryText(
+                    rate:
+                        rate
+                )
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+
+        } else if isRefreshingRate {
+
+            Label(
+                "正在查询银行实时汇率…",
+                systemImage:
+                    "arrow.triangle.2.circlepath"
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+        }
+
+
+        if let exchangeRateMessage {
+
+            Text(
+                exchangeRateMessage
+            )
+            .font(
+                .caption
+            )
+            .foregroundStyle(
+                .secondary
+            )
+        }
+    }
+
+
+    @ViewBuilder
+    private var categorySection:
+        some View {
+
+        if showsCategory {
+
+            Section {
+
+                Picker(
+                    "分类",
+                    selection:
+                        $category
+                ) {
+
+                    ForEach(
+                        currentCategoryItems
+                    ) { item in
+
+                        Label(
+                            item.name,
+                            systemImage:
+                                item.icon
+                        )
+                        .tag(
+                            item.name
+                        )
+                    }
+                }
+
+
+                NavigationLink {
+
+                    CategoryManagerView()
+
+                } label: {
+
+                    Label(
+                        "管理分类",
+                        systemImage:
+                            "square.grid.2x2"
+                    )
+                }
+
+            } header: {
+
+                Text(
+                    "分类"
+                )
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var creditCardSection:
+        some View {
+
+        if mode ==
+            .creditCard {
+
+            Section(
+                "信用卡"
+            ) {
+
+                if creditCards.isEmpty {
+
+                    Label(
+                        "还没有信用卡，请先到卡包添加",
+                        systemImage:
+                            "creditcard"
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+
+                } else {
+
+                    Picker(
+                        "选择信用卡",
+                        selection:
+                            $selectedCreditCardID
+                    ) {
+
+                        Text(
+                            "请选择"
+                        )
+                        .tag(
+                            UUID?.none
+                        )
+
+
+                        ForEach(
+                            creditCards
+                        ) { card in
+
+                            Text(
+                                creditCardPickerLabel(
+                                    card
+                                )
+                            )
+                            .tag(
+                                Optional(
+                                    card.id
+                                )
+                            )
+                        }
+                    }
+
+
+                    if let card =
+                        selectedCreditCard {
+
+                        LabeledContent(
+                            "当前欠款"
+                        ) {
+
+                            Text(
+                                sharedDebtText(
+                                    for:
+                                        card
+                                )
+                            )
+                            .fontWeight(
+                                .semibold
+                            )
+                        }
+
+
+                        if let available =
+                            CreditAccountService
+                                .availableCredit(
+                                    for:
+                                        card,
+                                    cards:
+                                        cards
+                                ) {
+
+                            LabeledContent(
+                                "可用额度"
+                            ) {
+
+                                Text(
+                                    cnyEstimateText(
+                                        available
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var sourceAccountSection:
+        some View {
+
+        if showsSourceAccount {
+
+            Section(
+                sourceSectionTitle
+            ) {
+
+                Picker(
+                    "选择账户",
+                    selection:
+                        $sourceAccountID
+                ) {
+
+                    Text(
+                        "请选择"
+                    )
+                    .tag(
+                        UUID?.none
+                    )
+
+
+                    ForEach(
+                        accounts
+                    ) { account in
+
+                        Text(
+                            accountPickerLabel(
+                                account
+                            )
+                        )
+                        .tag(
+                            Optional(
+                                account.id
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+
+    @ViewBuilder
+    private var targetAccountSection:
+        some View {
+
+        if mode ==
+            .transfer {
+
+            Section(
+                "转入账户"
+            ) {
+
+                Picker(
+                    "选择账户",
+                    selection:
+                        $targetAccountID
+                ) {
+
+                    Text(
+                        "请选择"
+                    )
+                    .tag(
+                        UUID?.none
+                    )
+
+
+                    ForEach(
+                        accounts
+                    ) { account in
+
+                        Text(
+                            account.name
+                        )
+                        .tag(
+                            Optional(
+                                account.id
+                            )
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+
+    private var otherSection:
+        some View {
+
+        Section(
+            "其他"
+        ) {
+
+            DatePicker(
+                "日期",
+                selection:
+                    Binding(
+                        get: {
+                            date
+                        },
+                        set: {
+                            newValue in
+
+                            date =
+                                newValue
+
+                            dateWasManuallyEdited =
+                                true
+                        }
+                    )
+            )
+
+
+            TextField(
+                "备注（可选）",
+                text:
+                    $note
+            )
+        }
+    }
+
+
+    private var saveSection:
+        some View {
+
+        Section {
+
+            Button {
+
+                saveTransaction()
+
+            } label: {
+
+                Text(
+                    "保存"
+                )
+                .frame(
+                    maxWidth:
+                        .infinity
+                )
+                .fontWeight(
+                    .semibold
+                )
+            }
+            .disabled(
+                !canSave
+            )
+        }
+    }
+
+
     private var showsCategory:
         Bool {
 
@@ -937,6 +1023,37 @@ struct AddTransactionView: View {
         return creditCards.first {
             $0.id == id
         }
+    }
+
+
+    private func creditCardPickerLabel(
+        _ card:
+            BankCard
+    ) -> String {
+
+        card.bankName +
+            " •••• " +
+            card.lastFourDigits
+    }
+
+
+    private func sharedDebtText(
+        for card:
+            BankCard
+    ) -> String {
+
+        let debt =
+            CreditAccountService
+                .sharedDebt(
+                    for:
+                        card,
+                    cards:
+                        cards
+                )
+
+        return cnyEstimateText(
+            debt
+        )
     }
 
 
