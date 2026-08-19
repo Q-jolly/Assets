@@ -3502,135 +3502,321 @@ private struct CategoryDonutBreakdownView: View {
         }
 
 
-        var adjusted =
-            layouts.sorted {
-                $0.end.y <
-                $1.end.y
+        // 关键原则：
+        // 不再为了避让标签直接修改 bend.y。
+        //
+        // start -> bend 必须永远沿着该扇区的半径方向向外，
+        // 因此第一段只允许改变“半径长度”，不能任意改 x/y。
+        //
+        // 这样整条第一段除了起点之外，都位于饼图外部白色区域。
+        let verticalEpsilon:
+            CGFloat = 0.04
+
+
+        let upperLayouts =
+            layouts.filter {
+                radialUnitY(
+                    for:
+                        $0,
+                    center:
+                        center
+                ) <
+                    -verticalEpsilon
             }
 
 
-        var previousY =
-            topLimit -
-            minimumGap
+        let lowerLayouts =
+            layouts.filter {
+                radialUnitY(
+                    for:
+                        $0,
+                    center:
+                        center
+                ) >
+                    verticalEpsilon
+            }
 
 
-        for index in
-            adjusted.indices {
+        let middleLayouts =
+            layouts.filter {
 
-            var layout =
-                adjusted[
-                    index
-                ]
-
-            let newY =
-                max(
-                    layout.end.y,
-                    previousY +
-                    minimumGap
-                )
-
-            layout.bend.y =
-                newY
-
-            layout.end.y =
-                newY
-
-            adjusted[
-                index
-            ] =
-                layout
-
-            previousY =
-                newY
-        }
-
-
-        if let last =
-            adjusted.last,
-           last.end.y >
-                bottomLimit {
-
-            let overflow =
-                last.end.y -
-                bottomLimit
-
-
-            for index in
-                adjusted.indices
-                    .reversed() {
-
-                var layout =
-                    adjusted[
-                        index
-                    ]
-
-                let shiftedY =
-                    layout.end.y -
-                    overflow
-
-
-                if index <
-                    adjusted.count -
-                    1 {
-
-                    let nextY =
-                        adjusted[
-                            index +
-                            1
-                        ]
-                        .end.y -
-                        minimumGap
-
-                    layout.end.y =
-                        min(
-                            shiftedY,
-                            nextY
-                        )
-
-                } else {
-
-                    layout.end.y =
-                        shiftedY
-                }
-
-
-                layout.end.y =
-                    max(
-                        layout.end.y,
-                        topLimit
+                abs(
+                    radialUnitY(
+                        for:
+                            $0,
+                        center:
+                            center
                     )
-
-                layout.bend.y =
-                    layout.end.y
-
-                adjusted[
-                    index
-                ] =
-                    layout
+                ) <=
+                    verticalEpsilon
             }
-        }
 
 
-        return adjusted.map {
-            layout in
-
-            outwardAdjustedLayout(
-                layout,
+        let adjustedUpper =
+            adjustRadialGroup(
+                upperLayouts,
+                isUpper:
+                    true,
+                topLimit:
+                    topLimit,
+                bottomLimit:
+                    bottomLimit,
+                minimumGap:
+                    minimumGap,
                 center:
                     center,
                 outerRadius:
                     outerRadius
             )
-        }
+
+
+        let adjustedLower =
+            adjustRadialGroup(
+                lowerLayouts,
+                isUpper:
+                    false,
+                topLimit:
+                    topLimit,
+                bottomLimit:
+                    bottomLimit,
+                minimumGap:
+                    minimumGap,
+                center:
+                    center,
+                outerRadius:
+                    outerRadius
+            )
+
+
+        let adjustedMiddle =
+            middleLayouts.map {
+                makeRadialCallout(
+                    $0,
+                    radius:
+                        outerRadius +
+                        30,
+                    center:
+                        center,
+                    outerRadius:
+                        outerRadius,
+                    topLimit:
+                        topLimit,
+                    bottomLimit:
+                        bottomLimit
+                )
+            }
+
+
+        return
+            adjustedUpper +
+            adjustedMiddle +
+            adjustedLower
     }
 
 
-    private func outwardAdjustedLayout(
-        _ layout:
-            CategoryCalloutLayout,
+    private func adjustRadialGroup(
+        _ layouts:
+            [CategoryCalloutLayout],
+        isUpper:
+            Bool,
+        topLimit:
+            CGFloat,
+        bottomLimit:
+            CGFloat,
+        minimumGap:
+            CGFloat,
         center:
             CGPoint,
         outerRadius:
+            CGFloat
+    ) -> [CategoryCalloutLayout] {
+
+        guard !layouts.isEmpty
+        else {
+            return []
+        }
+
+
+        let baseRadius =
+            outerRadius +
+            30
+
+
+        // 上半区从“靠近水平轴”向上处理；
+        // 下半区从“靠近水平轴”向下处理。
+        //
+        // 避让时只增加 radial radius，
+        // 所以斜线始终沿原扇区半径继续向外。
+        let sorted =
+            layouts.sorted {
+
+                let lhsY =
+                    radialY(
+                        for:
+                            $0,
+                        radius:
+                            baseRadius,
+                        center:
+                            center
+                    )
+
+                let rhsY =
+                    radialY(
+                        for:
+                            $1,
+                        radius:
+                            baseRadius,
+                        center:
+                            center
+                    )
+
+                if isUpper {
+                    return lhsY >
+                        rhsY
+                }
+
+                return lhsY <
+                    rhsY
+            }
+
+
+        var result:
+            [CategoryCalloutLayout] = []
+
+        var previousLineY:
+            CGFloat?
+
+
+        for layout in
+            sorted {
+
+            let unitY =
+                radialUnitY(
+                    for:
+                        layout,
+                    center:
+                        center
+                )
+
+
+            let naturalLineY =
+                radialY(
+                    for:
+                        layout,
+                    radius:
+                        baseRadius,
+                    center:
+                        center
+                )
+
+
+            var targetLineY =
+                naturalLineY
+
+
+            if let previousLineY {
+
+                if isUpper {
+
+                    targetLineY =
+                        min(
+                            targetLineY,
+                            previousLineY -
+                            minimumGap
+                        )
+
+                } else {
+
+                    targetLineY =
+                        max(
+                            targetLineY,
+                            previousLineY +
+                            minimumGap
+                        )
+                }
+            }
+
+
+            targetLineY =
+                min(
+                    max(
+                        targetLineY,
+                        topLimit
+                    ),
+                    bottomLimit
+                )
+
+
+            let requiredRadius:
+                CGFloat
+
+            if abs(
+                unitY
+            ) >
+                0.001 {
+
+                requiredRadius =
+                    (
+                        targetLineY -
+                        center.y
+                    ) /
+                    unitY
+
+            } else {
+
+                requiredRadius =
+                    baseRadius
+            }
+
+
+            let requestedRadius =
+                max(
+                    baseRadius,
+                    requiredRadius
+                )
+
+
+            let adjusted =
+                makeRadialCallout(
+                    layout,
+                    radius:
+                        requestedRadius,
+                    center:
+                        center,
+                    outerRadius:
+                        outerRadius,
+                    topLimit:
+                        topLimit,
+                    bottomLimit:
+                        bottomLimit
+                )
+
+
+            result.append(
+                adjusted
+            )
+
+            previousLineY =
+                adjusted.end.y
+        }
+
+
+        return result
+    }
+
+
+    private func makeRadialCallout(
+        _ layout:
+            CategoryCalloutLayout,
+        radius:
+            CGFloat,
+        center:
+            CGPoint,
+        outerRadius:
+            CGFloat,
+        topLimit:
+            CGFloat,
+        bottomLimit:
             CGFloat
     ) -> CategoryCalloutLayout {
 
@@ -3638,62 +3824,161 @@ private struct CategoryDonutBreakdownView: View {
             layout
 
 
-        let startVectorX =
+        let vectorX =
             result.start.x -
             center.x
 
-        let startVectorY =
+        let vectorY =
             result.start.y -
             center.y
 
-        let startVectorLength =
+        let vectorLength =
             max(
                 sqrt(
-                    startVectorX *
-                    startVectorX +
-                    startVectorY *
-                    startVectorY
+                    vectorX *
+                    vectorX +
+                    vectorY *
+                    vectorY
                 ),
                 0.001
             )
 
         let unitX =
-            startVectorX /
-            startVectorLength
+            vectorX /
+            vectorLength
 
         let unitY =
-            startVectorY /
-            startVectorLength
+            vectorY /
+            vectorLength
 
 
-        // 最终标签排版后的引线高度。
-        let lineY =
-            result.end.y
-
-        let deltaY =
-            lineY -
-            result.start.y
-
-
-        // 第一段必须至少向扇区法线外侧推进这么多。
-        // 这是避免斜线重新穿进饼图的关键约束。
-        let minimumNormalProjection:
-            CGFloat = 18
-
-        // 折点本身必须位于饼图外缘之外。
-        let safeRadius =
+        let minimumRadius =
             outerRadius +
-            18
+            26
 
-        // 水平段必须有足够可见长度。
+
+        var maximumRadius =
+            CGFloat.greatestFiniteMagnitude
+
+
+        // 约束 1：标签/水平线不能跑出上下显示区域。
+        if unitY <
+            -0.001 {
+
+            maximumRadius =
+                min(
+                    maximumRadius,
+                    (
+                        center.y -
+                        topLimit
+                    ) /
+                    -unitY
+                )
+
+        } else if unitY >
+                    0.001 {
+
+            maximumRadius =
+                min(
+                    maximumRadius,
+                    (
+                        bottomLimit -
+                        center.y
+                    ) /
+                    unitY
+                )
+        }
+
+
+        // 约束 2：bend 后面必须还留得下一个明显的水平段。
         let minimumHorizontalLength:
-            CGFloat = 52
+            CGFloat = 38
+
+        if result.isRightSide,
+           unitX >
+            0.001 {
+
+            maximumRadius =
+                min(
+                    maximumRadius,
+                    (
+                        result.end.x -
+                        minimumHorizontalLength -
+                        center.x
+                    ) /
+                    unitX
+                )
+
+        } else if !result.isRightSide,
+                  unitX <
+                    -0.001 {
+
+            maximumRadius =
+                min(
+                    maximumRadius,
+                    (
+                        center.x -
+                        (
+                            result.end.x +
+                            minimumHorizontalLength
+                        )
+                    ) /
+                    -unitX
+                )
+        }
+
+
+        let effectiveRadius:
+            CGFloat
+
+        if maximumRadius >=
+            minimumRadius {
+
+            effectiveRadius =
+                min(
+                    max(
+                        radius,
+                        minimumRadius
+                    ),
+                    maximumRadius
+                )
+
+        } else {
+
+            // 极端窄空间时仍优先保证第一段不进入饼图。
+            effectiveRadius =
+                minimumRadius
+        }
+
+
+        let bend =
+            CGPoint(
+                x:
+                    center.x +
+                    unitX *
+                    effectiveRadius,
+                y:
+                    center.y +
+                    unitY *
+                    effectiveRadius
+            )
+
+
+        result.bend =
+            bend
+
+        // 第二段只做水平延伸。
+        result.end.y =
+            bend.y
+
+
+        // 标签依旧锁在显示区域内，
+        // 水平线终点贴近标签内侧。
+        let labelSafeMargin:
+            CGFloat = 12
 
         let labelGap:
             CGFloat = 7
-
-        let labelSafeMargin:
-            CGFloat = 14
 
         let halfLabelWidth =
             result.labelFrameWidth /
@@ -3715,209 +4000,86 @@ private struct CategoryDonutBreakdownView: View {
 
         if result.isRightSide {
 
-            // 切线外侧半平面约束：
-            // (bend - start) · outwardNormal >= minimumNormalProjection
-            let projectionSafeX =
-                result.start.x +
-                (
-                    minimumNormalProjection -
-                    deltaY *
-                    unitY
-                ) /
-                max(
-                    unitX,
-                    0.08
-                )
-
-
-            // 在 lineY 这一高度上，求安全圆最右侧边界。
-            let safeDeltaY =
-                lineY -
-                center.y
-
-            let safeBoundaryX:
-                CGFloat
-
-            if abs(
-                safeDeltaY
-            ) <
-                safeRadius {
-
-                safeBoundaryX =
-                    center.x +
-                    sqrt(
-                        max(
-                            0,
-                            safeRadius *
-                            safeRadius -
-                            safeDeltaY *
-                            safeDeltaY
-                        )
-                    )
-
-            } else {
-
-                safeBoundaryX =
-                    center.x
-            }
-
-
-            var bendX =
-                max(
-                    projectionSafeX,
-                    safeBoundaryX +
-                    4,
-                    result.start.x +
-                    12
-                )
-
-
-            // 标签必须始终留在显示区域内。
-            // 水平线末端贴近标签左侧，不允许为了拉长线把标签推出屏幕。
             let labelLeftEdge =
                 result.textAnchorX -
-                result.labelFrameWidth /
-                2
+                halfLabelWidth
 
             result.end.x =
-                labelLeftEdge -
-                labelGap
-
-
-            // 优先保证折点安全；如果空间不足，
-            // 只缩短水平段，不移动标签。
-            let availableHorizontal =
                 max(
-                    result.end.x -
-                    bendX,
-                    10
+                    bend.x +
+                    12,
+                    labelLeftEdge -
+                    labelGap
                 )
-
-            let horizontalLength =
-                min(
-                    minimumHorizontalLength,
-                    availableHorizontal
-                )
-
-            bendX =
-                min(
-                    bendX,
-                    result.end.x -
-                    horizontalLength
-                )
-
-            result.bend =
-                CGPoint(
-                    x:
-                        bendX,
-                    y:
-                        lineY
-                )
-
 
         } else {
 
-            // 左侧完全对称。
-            let projectionSafeX =
-                result.start.x +
-                (
-                    minimumNormalProjection -
-                    deltaY *
-                    unitY
-                ) /
-                min(
-                    unitX,
-                    -0.08
-                )
-
-
-            let safeDeltaY =
-                lineY -
-                center.y
-
-            let safeBoundaryX:
-                CGFloat
-
-            if abs(
-                safeDeltaY
-            ) <
-                safeRadius {
-
-                safeBoundaryX =
-                    center.x -
-                    sqrt(
-                        max(
-                            0,
-                            safeRadius *
-                            safeRadius -
-                            safeDeltaY *
-                            safeDeltaY
-                        )
-                    )
-
-            } else {
-
-                safeBoundaryX =
-                    center.x
-            }
-
-
-            var bendX =
-                min(
-                    projectionSafeX,
-                    safeBoundaryX -
-                    4,
-                    result.start.x -
-                    12
-                )
-
-
-            // 标签必须始终留在显示区域内。
-            // 水平线末端贴近标签右侧，不允许为了拉长线把标签推出屏幕。
             let labelRightEdge =
                 result.textAnchorX +
-                result.labelFrameWidth /
-                2
+                halfLabelWidth
 
             result.end.x =
-                labelRightEdge +
-                labelGap
-
-
-            // 优先保证折点安全；如果空间不足，
-            // 只缩短水平段，不移动标签。
-            let availableHorizontal =
-                max(
-                    bendX -
-                    result.end.x,
-                    10
-                )
-
-            let horizontalLength =
                 min(
-                    minimumHorizontalLength,
-                    availableHorizontal
-                )
-
-            bendX =
-                max(
-                    bendX,
-                    result.end.x +
-                    horizontalLength
-                )
-
-            result.bend =
-                CGPoint(
-                    x:
-                        bendX,
-                    y:
-                        lineY
+                    bend.x -
+                    12,
+                    labelRightEdge +
+                    labelGap
                 )
         }
 
 
-        // bend.y == end.y，所以第二段严格水平。
         return result
+    }
+
+
+    private func radialUnitY(
+        for layout:
+            CategoryCalloutLayout,
+        center:
+            CGPoint
+    ) -> CGFloat {
+
+        let dx =
+            layout.start.x -
+            center.x
+
+        let dy =
+            layout.start.y -
+            center.y
+
+        let length =
+            max(
+                sqrt(
+                    dx *
+                    dx +
+                    dy *
+                    dy
+                ),
+                0.001
+            )
+
+        return dy /
+            length
+    }
+
+
+    private func radialY(
+        for layout:
+            CategoryCalloutLayout,
+        radius:
+            CGFloat,
+        center:
+            CGPoint
+    ) -> CGFloat {
+
+        center.y +
+        radialUnitY(
+            for:
+                layout,
+            center:
+                center
+        ) *
+        radius
     }
 
 }
