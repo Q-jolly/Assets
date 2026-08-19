@@ -2779,8 +2779,17 @@ struct AddCardView: View {
                     ? " · 已自动提取卡面"
                     : ""
 
-                recognitionMessage =
-                    "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。请核对后保存。"
+                if result.lastFourDigits ==
+                    nil {
+
+                    recognitionMessage =
+                        "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。这类卡面可能没有印卡号，后四位请手动填写后保存。"
+
+                } else {
+
+                    recognitionMessage =
+                        "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。请核对后保存。"
+                }
 
             } else {
 
@@ -5528,7 +5537,10 @@ struct EditCardView: View {
                 nil {
 
                 debtRateMessage =
-                    "暂时无法获取实时汇率，请联网后重试。"
+                    ExchangeRateService
+                        .userFacingErrorMessage(
+                            error
+                        )
             }
         }
     }

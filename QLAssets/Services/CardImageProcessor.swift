@@ -49,7 +49,9 @@ enum CardImageProcessor {
         if let detectedImage =
             detectAndCorrectCard(
                 from:
-                    normalizedImage
+                    normalizedImage,
+                normalizeToLandscape:
+                    true
             ),
            let data =
             jpegData(
@@ -115,11 +117,60 @@ enum CardImageProcessor {
     }
 
 
+    // OCR 专用：保留银行卡在照片中的真实横竖方向。
+    // 竖版艺术卡如果先强制旋转并裁成横卡，会把银行名称和
+    // “debit / credit”等小字切掉，导致识别失败。
+    static func extractCardFaceForRecognition(
+        from imageData:
+            Data
+    ) -> Data? {
+
+        guard
+            let sourceImage =
+                UIImage(
+                    data:
+                        imageData
+                )
+        else {
+
+            return nil
+        }
+
+
+        let normalizedImage =
+            normalizeOrientation(
+                sourceImage
+            )
+
+
+        guard
+            let detectedImage =
+                detectAndCorrectCard(
+                    from:
+                        normalizedImage,
+                    normalizeToLandscape:
+                        false
+                )
+        else {
+
+            return nil
+        }
+
+
+        return jpegData(
+            from:
+                detectedImage
+        )
+    }
+
+
     // MARK: - 银行卡矩形检测
 
     private static func detectAndCorrectCard(
         from image:
-            UIImage
+            UIImage,
+        normalizeToLandscape:
+            Bool
     ) -> UIImage? {
 
         guard
@@ -210,7 +261,9 @@ enum CardImageProcessor {
             cgImage:
                 cgImage,
             observation:
-                best
+                best,
+            normalizeToLandscape:
+                normalizeToLandscape
         )
     }
 
@@ -277,7 +330,9 @@ enum CardImageProcessor {
         cgImage:
             CGImage,
         observation:
-            VNRectangleObservation
+            VNRectangleObservation,
+        normalizeToLandscape:
+            Bool
     ) -> UIImage? {
 
         let ciImage =
@@ -383,8 +438,15 @@ enum CardImageProcessor {
             )
 
 
-        // 如果透视矫正结果是竖向的，
-        // 自动旋转成银行卡常见的横向卡面。
+        guard normalizeToLandscape
+        else {
+
+            // OCR 要看到完整的竖版卡面，不做横向旋转和二次裁切。
+            return result
+        }
+
+
+        // 卡包 UI 仍沿用横向银行卡卡面，因此原有展示逻辑不变。
         if result.size.height >
             result.size.width {
 

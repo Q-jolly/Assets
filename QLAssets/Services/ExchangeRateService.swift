@@ -78,14 +78,42 @@ enum ExchangeRateService {
     private static let cmbURL =
         URL(
             string:
-                "https://fx.cmbchina.cn/hq/"
+                "https://fx.cmbchina.com/hq/"
         )!
 
     private static let bocURL =
         URL(
             string:
-                "https://www.bankofchina.com/english/bocinfo/"
+                "https://www.bankofchina.com/sourcedb/whpj/"
         )!
+
+    private static let currencyNameToCode:
+        [String: String] = [
+
+            "美元": "USD",
+            "欧元": "EUR",
+            "英镑": "GBP",
+            "日元": "JPY",
+            "港币": "HKD",
+            "港元": "HKD",
+            "澳大利亚元": "AUD",
+            "澳元": "AUD",
+            "加拿大元": "CAD",
+            "加元": "CAD",
+            "新加坡元": "SGD",
+            "瑞士法郎": "CHF",
+            "新西兰元": "NZD",
+            "韩元": "KRW",
+            "韩国元": "KRW",
+            "泰国铢": "THB",
+            "泰铢": "THB",
+            "阿联酋迪拉姆": "AED",
+            "澳门元": "MOP",
+            "澳门币": "MOP",
+            "丹麦克朗": "DKK",
+            "瑞典克朗": "SEK",
+            "挪威克朗": "NOK"
+        ]
 
 
     static func cachedSnapshot()
@@ -204,23 +232,6 @@ enum ExchangeRateService {
                 html
             )
 
-        let nameToCode:
-            [String: String] = [
-
-                "美元": "USD",
-                "欧元": "EUR",
-                "英镑": "GBP",
-                "日元": "JPY",
-                "港币": "HKD",
-                "澳大利亚元": "AUD",
-                "澳元": "AUD",
-                "加拿大元": "CAD",
-                "新加坡元": "SGD",
-                "瑞士法郎": "CHF",
-                "新西兰元": "NZD"
-            ]
-
-
         var rates:
             [String: Double] = [
 
@@ -234,8 +245,10 @@ enum ExchangeRateService {
                 cells.count >=
                     7,
                 let code =
-                    nameToCode[
-                        cells[0]
+                    currencyNameToCode[
+                        normalizedCurrencyName(
+                            cells[0]
+                        )
                     ]
             else {
                 continue
@@ -341,18 +354,17 @@ enum ExchangeRateService {
             }
 
 
-            let code =
-                cells[0]
-                    .trimmingCharacters(
-                        in:
-                            .whitespacesAndNewlines
-                    )
-                    .uppercased()
+            let currencyName =
+                normalizedCurrencyName(
+                    cells[0]
+                )
 
 
             guard
-                code.count ==
-                    3,
+                let code =
+                    currencyNameToCode[
+                        currencyName
+                    ],
                 CurrencyCatalog.supported
                     .contains(
                         where: {
@@ -435,6 +447,73 @@ enum ExchangeRateService {
                     .boc
                     .displayName
         )
+    }
+
+
+    private static func normalizedCurrencyName(
+        _ value:
+            String
+    ) -> String {
+
+        value
+            .replacingOccurrences(
+                of:
+                    "&nbsp;",
+                with:
+                    " "
+            )
+            .trimmingCharacters(
+                in:
+                    .whitespacesAndNewlines
+            )
+    }
+
+
+    static func userFacingErrorMessage(
+        _ error:
+            Error
+    ) -> String {
+
+        guard
+            let urlError =
+                error as?
+                    URLError
+        else {
+
+            return
+                "银行汇率页面暂时不可用，请稍后重试。"
+        }
+
+
+        switch urlError.code {
+
+        case .notConnectedToInternet,
+             .networkConnectionLost,
+             .dataNotAllowed:
+
+            return
+                "当前网络不可用，联网后可自动获取银行实时汇率。"
+
+        case .timedOut,
+             .cannotConnectToHost,
+             .cannotFindHost,
+             .dnsLookupFailed:
+
+            return
+                "连接银行汇率页面超时，请稍后重试。"
+
+        case .cannotParseResponse,
+             .cannotDecodeContentData,
+             .badServerResponse:
+
+            return
+                "银行汇率页面返回异常，请稍后重试。"
+
+        default:
+
+            return
+                "暂时无法获取银行实时汇率，请稍后重试。"
+        }
     }
 
 

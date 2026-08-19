@@ -86,7 +86,36 @@ enum CardImageOCRService {
             [UIImage] = []
 
 
-        // 第一优先：自动提取后的银行卡本体。
+        // 竖版艺术卡 OCR 必须保留真实方向。
+        // 卡包展示用的横向卡面会为了 UI 做旋转/裁切，
+        // 不能再拿那个结果作为唯一 OCR 输入。
+        if let recognitionData =
+            CardImageProcessor
+                .extractCardFaceForRecognition(
+                    from:
+                        imageData
+                ),
+           let recognitionCardImage =
+            UIImage(
+                data:
+                    recognitionData
+            ) {
+
+            recognitionImages.append(
+                recognitionCardImage
+            )
+
+            recognitionImages.append(
+                contentsOf:
+                    focusedOCRImages(
+                        from:
+                            recognitionCardImage
+                    )
+            )
+        }
+
+
+        // 卡包展示使用的自动提取卡面仍参与普通 OCR。
         if let extractedData =
             extraction?
                 .imageData,
@@ -102,23 +131,18 @@ enum CardImageOCRService {
         }
 
 
-        // 第二优先：原始截图。
-        // 有些 Apple Wallet / 银行 App 截图中的卡面文字，
-        // 经过透视矫正后反而不如原图容易识别。
+        // 原图继续作为兜底；同时针对顶部银行名称区域做放大 OCR。
         recognitionImages.append(
             originalImage
         )
 
-        // 竖版银行卡（动漫卡、校园卡、定制卡）常见：
-        // 正面文字方向与横版不同，额外尝试旋转识别。
-        if originalImage.size.height > originalImage.size.width {
-            if let rotated90 = rotateImage(originalImage, degrees: 90) {
-                recognitionImages.append(rotated90)
-            }
-            if let rotated270 = rotateImage(originalImage, degrees: 270) {
-                recognitionImages.append(rotated270)
-            }
-        }
+        recognitionImages.append(
+            contentsOf:
+                focusedOCRImages(
+                    from:
+                        originalImage
+                )
+        )
 
 
         var allObservations:
@@ -468,6 +492,203 @@ enum CardImageOCRService {
     }
 
 
+    // MARK: - 艺术卡局部 OCR
+
+    private static func focusedOCRImages(
+        from image:
+            UIImage
+    ) -> [UIImage] {
+
+        let regions:
+            [CGRect] = [
+
+                // 顶部整条：银行名称 + debit / credit 常在这里。
+                CGRect(
+                    x: 0.00,
+                    y: 0.00,
+                    width: 1.00,
+                    height: 0.34
+                ),
+
+                // 左上：银行 Logo / 中英文银行名称。
+                CGRect(
+                    x: 0.00,
+                    y: 0.00,
+                    width: 0.72,
+                    height: 0.28
+                ),
+
+                // 右上：Gold debit / Visa / Mastercard 等小字。
+                CGRect(
+                    x: 0.48,
+                    y: 0.00,
+                    width: 0.52,
+                    height: 0.32
+                )
+            ]
+
+
+        return regions
+            .compactMap {
+                region in
+
+                cropAndUpscaleForOCR(
+                    image,
+                    normalizedRect:
+                        region
+                )
+            }
+    }
+
+
+    private static func cropAndUpscaleForOCR(
+        _ image:
+            UIImage,
+        normalizedRect:
+            CGRect
+    ) -> UIImage? {
+
+        guard
+            let cgImage =
+                normalizedCGImage(
+                    from:
+                        image
+                )
+        else {
+
+            return nil
+        }
+
+
+        let width =
+            CGFloat(
+                cgImage.width
+            )
+
+        let height =
+            CGFloat(
+                cgImage.height
+            )
+
+
+        var pixelRect =
+            CGRect(
+                x:
+                    normalizedRect.minX *
+                    width,
+                y:
+                    normalizedRect.minY *
+                    height,
+                width:
+                    normalizedRect.width *
+                    width,
+                height:
+                    normalizedRect.height *
+                    height
+            )
+            .integral
+
+
+        pixelRect =
+            pixelRect.intersection(
+                CGRect(
+                    x: 0,
+                    y: 0,
+                    width:
+                        width,
+                    height:
+                        height
+                )
+            )
+
+
+        guard
+            !pixelRect.isNull,
+            pixelRect.width >
+                8,
+            pixelRect.height >
+                8,
+            let cropped =
+                cgImage.cropping(
+                    to:
+                        pixelRect
+                )
+        else {
+
+            return nil
+        }
+
+
+        let croppedImage =
+            UIImage(
+                cgImage:
+                    cropped,
+                scale: 1,
+                orientation:
+                    .up
+            )
+
+
+        let targetWidth:
+            CGFloat =
+                1500
+
+        let scale =
+            max(
+                1,
+                min(
+                    4,
+                    targetWidth /
+                    max(
+                        croppedImage.size.width,
+                        1
+                    )
+                )
+            )
+
+
+        guard scale >
+            1.01
+        else {
+
+            return croppedImage
+        }
+
+
+        let targetSize =
+            CGSize(
+                width:
+                    croppedImage.size.width *
+                    scale,
+                height:
+                    croppedImage.size.height *
+                    scale
+            )
+
+
+        let renderer =
+            UIGraphicsImageRenderer(
+                size:
+                    targetSize
+            )
+
+
+        return renderer.image {
+            _ in
+
+            croppedImage.draw(
+                in:
+                    CGRect(
+                        origin:
+                            .zero,
+                        size:
+                            targetSize
+                    )
+            )
+        }
+    }
+
+
     private static func highContrastImage(
         from image:
             UIImage
@@ -530,11 +751,44 @@ enum CardImageOCRService {
 
 
         guard
-            let output =
+            let colorOutput =
                 filter.outputImage
         else {
 
             return nil
+        }
+
+
+        let sharpenedOutput:
+            CIImage
+
+
+        if let sharpen =
+            CIFilter(
+                name:
+                    "CISharpenLuminance"
+            ) {
+
+            sharpen.setValue(
+                colorOutput,
+                forKey:
+                    kCIInputImageKey
+            )
+
+            sharpen.setValue(
+                0.70,
+                forKey:
+                    kCIInputSharpnessKey
+            )
+
+            sharpenedOutput =
+                sharpen.outputImage ??
+                colorOutput
+
+        } else {
+
+            sharpenedOutput =
+                colorOutput
         }
 
 
@@ -551,9 +805,9 @@ enum CardImageOCRService {
         guard
             let outputCGImage =
                 context.createCGImage(
-                    output,
+                    sharpenedOutput,
                     from:
-                        output.extent
+                        sharpenedOutput.extent
                 )
         else {
 
@@ -581,6 +835,11 @@ enum CardImageOCRService {
 
         let normalized =
             text.uppercased()
+
+        let compactNormalized =
+            compactBankText(
+                normalized
+            )
 
         let bankAliases:
             [(
@@ -611,7 +870,9 @@ enum CardImageOCRService {
                 (
                     [
                         "中国银行",
+                        "中國銀行",
                         "BANK OF CHINA",
+                        "BANKOFCHINA",
                         "BOC"
                     ],
                     "中国银行"
@@ -767,9 +1028,21 @@ enum CardImageOCRService {
 
             if item.keywords.contains(
                 where: {
-                    normalized.contains(
-                        $0.uppercased()
-                    )
+                    keyword in
+
+                    let upperKeyword =
+                        keyword.uppercased()
+
+                    return
+                        normalized.contains(
+                            upperKeyword
+                        )
+                        ||
+                        compactNormalized.contains(
+                            compactBankText(
+                                upperKeyword
+                            )
+                        )
                 }
             ) {
 
@@ -779,6 +1052,43 @@ enum CardImageOCRService {
         }
 
         return nil
+    }
+
+
+    private static func compactBankText(
+        _ value:
+            String
+    ) -> String {
+
+        var result =
+            ""
+
+
+        for scalar in
+            value.unicodeScalars {
+
+            if CharacterSet.alphanumerics
+                .contains(
+                    scalar
+                )
+                ||
+                (
+                    scalar.value >=
+                        0x4E00
+                    &&
+                    scalar.value <=
+                        0x9FFF
+                ) {
+
+                result.unicodeScalars
+                    .append(
+                        scalar
+                    )
+            }
+        }
+
+
+        return result
     }
 
 
