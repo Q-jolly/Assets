@@ -17,8 +17,26 @@ struct StatisticsView: View {
     private var monthlyBudget:
         Double = 0
 
+    @AppStorage(
+        CategoryStore
+            .expenseKey
+    )
+    private var expenseCategoriesStored =
+        ""
+
+    @AppStorage(
+        CategoryBudgetStore
+            .storageKey
+    )
+    private var categoryBudgetsStored =
+        ""
+
     @State
     private var showBudgetEditor =
+        false
+
+    @State
+    private var showCategoryBudgetEditor =
         false
 
     @State
@@ -469,6 +487,64 @@ struct StatisticsView: View {
         }
 
         return nil
+    }
+
+
+    // MARK: - 分类预算
+
+    private var expenseCategoryItems:
+        [CategoryItem] {
+
+        CategoryStore
+            .expenseCategories(
+                from:
+                    expenseCategoriesStored
+            )
+    }
+
+
+    private var categoryBudgets:
+        [String: Double] {
+
+        CategoryBudgetStore
+            .decode(
+                categoryBudgetsStored
+            )
+    }
+
+
+    private var configuredCategoryBudgetItems:
+        [CategoryItem] {
+
+        expenseCategoryItems
+            .filter {
+                (
+                    categoryBudgets[
+                        $0.name
+                    ] ??
+                    0
+                ) >
+                0
+            }
+    }
+
+
+    private func categoryExpense(
+        _ category:
+            String
+    ) -> Double {
+
+        expenseTransactions
+            .filter {
+                $0.category ==
+                category
+            }
+            .reduce(0) {
+                $0 +
+                abs(
+                    $1.amount
+                )
+            }
     }
 
 
@@ -938,6 +1014,8 @@ struct StatisticsView: View {
 
                 budgetCard
 
+                categoryBudgetCard
+
                 dailyExpenseSection
 
                 categorySection
@@ -962,6 +1040,18 @@ struct StatisticsView: View {
             BudgetEditorView(
                 monthlyBudget:
                     $monthlyBudget
+            )
+        }
+        .sheet(
+            isPresented:
+                $showCategoryBudgetEditor
+        ) {
+
+            CategoryBudgetEditorView(
+                stored:
+                    $categoryBudgetsStored,
+                categories:
+                    expenseCategoryItems
             )
         }
     }
@@ -1526,6 +1616,232 @@ struct StatisticsView: View {
         .clipShape(
             RoundedRectangle(
                 cornerRadius: 20,
+                style:
+                    .continuous
+            )
+        )
+    }
+
+
+    // MARK: - 分类预算
+
+    private var categoryBudgetCard:
+        some View {
+
+        VStack(
+            alignment:
+                .leading,
+            spacing:
+                14
+        ) {
+
+            HStack {
+
+                VStack(
+                    alignment:
+                        .leading,
+                    spacing:
+                        3
+                ) {
+
+                    Text(
+                        "分类预算"
+                    )
+                    .font(
+                        .title3
+                            .bold()
+                    )
+
+                    Text(
+                        "给餐饮、购物等分类单独设置预算"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+
+
+                Spacer()
+
+
+                Button(
+                    configuredCategoryBudgetItems
+                        .isEmpty
+                    ? "设置"
+                    : "管理"
+                ) {
+
+                    showCategoryBudgetEditor =
+                        true
+                }
+                .font(
+                    .subheadline
+                )
+            }
+
+
+            if configuredCategoryBudgetItems
+                .isEmpty {
+
+                Text(
+                    "还没有设置分类预算。设置后，可以直接看到每个分类的使用进度、剩余额度和超支状态。"
+                )
+                .font(
+                    .subheadline
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+            } else {
+
+                VStack(
+                    spacing:
+                        16
+                ) {
+
+                    ForEach(
+                        configuredCategoryBudgetItems
+                    ) { item in
+
+                        let budget =
+                            categoryBudgets[
+                                item.name
+                            ] ??
+                            0
+
+                        let spent =
+                            categoryExpense(
+                                item.name
+                            )
+
+                        let rawProgress =
+                            budget >
+                            0
+                            ? spent /
+                                budget
+                            : 0
+
+                        let remaining =
+                            budget -
+                            spent
+
+
+                        VStack(
+                            alignment:
+                                .leading,
+                            spacing:
+                                7
+                        ) {
+
+                            HStack(
+                                spacing:
+                                    10
+                            ) {
+
+                                Image(
+                                    systemName:
+                                        item.icon
+                                )
+                                .frame(
+                                    width:
+                                        24
+                                )
+
+                                Text(
+                                    item.name
+                                )
+                                .fontWeight(
+                                    .medium
+                                )
+
+
+                                Spacer()
+
+
+                                Text(
+                                    "\(spent.formatted(.currency(code: "CNY"))) / \(budget.formatted(.currency(code: "CNY")))"
+                                )
+                                .font(
+                                    .caption
+                                )
+                                .foregroundStyle(
+                                    rawProgress >=
+                                        1
+                                    ? .red
+                                    : .secondary
+                                )
+                            }
+
+
+                            ProgressView(
+                                value:
+                                    min(
+                                        rawProgress,
+                                        1
+                                    )
+                            )
+                            .tint(
+                                rawProgress >=
+                                    1
+                                ? .red
+                                : rawProgress >=
+                                    0.8
+                                    ? .orange
+                                    : .accentColor
+                            )
+
+
+                            HStack {
+
+                                Text(
+                                    "\(Int(rawProgress * 100))%"
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+
+
+                                Spacer()
+
+
+                                Text(
+                                    remaining >=
+                                        0
+                                    ? "剩余 \(remaining.formatted(.currency(code: "CNY")))"
+                                    : "超出 \(abs(remaining).formatted(.currency(code: "CNY")))"
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .foregroundStyle(
+                                    remaining <
+                                        0
+                                    ? .red
+                                    : .secondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(
+            Color(
+                .secondarySystemBackground
+            )
+        )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    20,
                 style:
                     .continuous
             )
@@ -4486,6 +4802,402 @@ private struct BudgetEditorView: View {
 
         monthlyBudget =
             amount
+
+        dismiss()
+    }
+}
+
+
+
+// MARK: - 分类预算编辑
+
+private struct CategoryBudgetEditorView:
+    View {
+
+    @Environment(
+        \.dismiss
+    )
+    private var dismiss
+
+    @Binding
+    private var stored:
+        String
+
+    let categories:
+        [CategoryItem]
+
+    @State
+    private var drafts:
+        [String: String]
+
+
+    init(
+        stored:
+            Binding<String>,
+        categories:
+            [CategoryItem]
+    ) {
+
+        self._stored =
+            stored
+
+        self.categories =
+            categories
+
+
+        let existing =
+            CategoryBudgetStore
+                .decode(
+                    stored
+                        .wrappedValue
+                )
+
+
+        self._drafts =
+            State(
+                initialValue:
+                    Dictionary(
+                        uniqueKeysWithValues:
+                            categories.map {
+                                item in
+
+                                let value =
+                                    existing[
+                                        item.name
+                                    ] ??
+                                    0
+
+                                return (
+                                    item.name,
+                                    value >
+                                    0
+                                    ? value.formatted(
+                                        .number
+                                            .precision(
+                                                .fractionLength(
+                                                    0...2
+                                                )
+                                            )
+                                    )
+                                    : ""
+                                )
+                            }
+                    )
+            )
+    }
+
+
+    var body:
+        some View {
+
+        NavigationStack {
+
+            List {
+
+                Section {
+
+                    ForEach(
+                        categories
+                    ) { item in
+
+                        HStack(
+                            spacing:
+                                12
+                        ) {
+
+                            Image(
+                                systemName:
+                                    item.icon
+                            )
+                            .frame(
+                                width:
+                                    28
+                            )
+
+
+                            Text(
+                                item.name
+                            )
+
+
+                            Spacer()
+
+
+                            HStack(
+                                spacing:
+                                    4
+                            ) {
+
+                                Text(
+                                    "¥"
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+
+                                TextField(
+                                    "不设置",
+                                    text:
+                                        draftBinding(
+                                            for:
+                                                item.name
+                                        )
+                                )
+                                .keyboardType(
+                                    .decimalPad
+                                )
+                                .multilineTextAlignment(
+                                    .trailing
+                                )
+                                .frame(
+                                    width:
+                                        90
+                                )
+                            }
+                        }
+                    }
+
+                } header: {
+
+                    Text(
+                        "支出分类"
+                    )
+
+                } footer: {
+
+                    Text(
+                        "留空表示该分类不单独设置预算。分类预算只用于提醒和统计，不会改变总资产或账单金额。"
+                    )
+                }
+
+
+                if !CategoryBudgetStore
+                    .decode(
+                        stored
+                    )
+                    .isEmpty {
+
+                    Section {
+
+                        Button(
+                            "清除全部分类预算",
+                            role:
+                                .destructive
+                        ) {
+
+                            stored =
+                                ""
+
+                            drafts =
+                                Dictionary(
+                                    uniqueKeysWithValues:
+                                        categories.map {
+                                            (
+                                                $0.name,
+                                                ""
+                                            )
+                                        }
+                                )
+
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .navigationTitle(
+                "分类预算"
+            )
+            .navigationBarTitleDisplayMode(
+                .inline
+            )
+            .toolbar {
+
+                ToolbarItem(
+                    placement:
+                        .cancellationAction
+                ) {
+
+                    Button(
+                        "取消"
+                    ) {
+
+                        dismiss()
+                    }
+                }
+
+
+                ToolbarItem(
+                    placement:
+                        .confirmationAction
+                ) {
+
+                    Button(
+                        "保存"
+                    ) {
+
+                        save()
+                    }
+                    .fontWeight(
+                        .semibold
+                    )
+                }
+
+
+                ToolbarItemGroup(
+                    placement:
+                        .keyboard
+                ) {
+
+                    Spacer()
+
+                    Button(
+                        "完成"
+                    ) {
+
+                        UIApplication
+                            .shared
+                            .sendAction(
+                                #selector(
+                                    UIResponder
+                                        .resignFirstResponder
+                                ),
+                                to:
+                                    nil,
+                                from:
+                                    nil,
+                                for:
+                                    nil
+                            )
+                    }
+                }
+            }
+        }
+    }
+
+
+    private func draftBinding(
+        for category:
+            String
+    ) -> Binding<String> {
+
+        Binding(
+            get: {
+
+                drafts[
+                    category
+                ] ??
+                ""
+            },
+            set: {
+
+                drafts[
+                    category
+                ] =
+                    normalizedAmountText(
+                        $0
+                    )
+            }
+        )
+    }
+
+
+    private func normalizedAmountText(
+        _ value:
+            String
+    ) -> String {
+
+        let normalized =
+            value.replacingOccurrences(
+                of:
+                    "，",
+                with:
+                    "."
+            )
+
+
+        var result =
+            ""
+
+        var hasDecimalPoint =
+            false
+
+
+        for character in
+            normalized {
+
+            if character
+                .isNumber {
+
+                result.append(
+                    character
+                )
+
+            } else if character ==
+                        ".",
+                      !hasDecimalPoint {
+
+                if result
+                    .isEmpty {
+
+                    result =
+                        "0"
+                }
+
+                result.append(
+                    "."
+                )
+
+                hasDecimalPoint =
+                    true
+            }
+        }
+
+
+        return result
+    }
+
+
+    private func save() {
+
+        var budgets:
+            [String: Double] = [:]
+
+
+        for item in
+            categories {
+
+            let raw =
+                drafts[
+                    item.name
+                ] ??
+                ""
+
+            guard
+                let amount =
+                    Double(
+                        raw
+                    ),
+                amount >
+                    0
+            else {
+
+                continue
+            }
+
+
+            budgets[
+                item.name
+            ] =
+                amount
+        }
+
+
+        stored =
+            CategoryBudgetStore
+                .encode(
+                    budgets
+                )
+
 
         dismiss()
     }
