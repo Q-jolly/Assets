@@ -380,6 +380,15 @@ final class TransactionRecord {
 }
 
 
+
+// MARK: - 卡面类型
+enum CardFaceType: String, Codable, CaseIterable {
+    case standard = "标准银行卡"
+    case art = "艺术收藏卡"
+    case virtual = "虚拟卡"
+    case noNumber = "无号码卡"
+}
+
 // MARK: - BankCard
 
 @Model
@@ -390,6 +399,9 @@ final class BankCard {
     var bankName: String
 
     var cardTypeRaw: String
+
+    // OCR识别出的卡面类型，可为空兼容旧数据
+    var faceTypeRaw: String?
 
     /*
      当前阶段不保存完整银行卡号，
@@ -457,7 +469,8 @@ final class BankCard {
         currentDebtExchangeRateToCNY: Double? = nil,
         billingDay: Int? = nil,
         repaymentDay: Int? = nil,
-        sortOrder: Int = 0
+        sortOrder: Int = 0,
+        faceType: CardFaceType = .standard
     ) {
 
         self.id =
@@ -468,6 +481,9 @@ final class BankCard {
 
         self.cardTypeRaw =
             cardType.rawValue
+
+        self.faceTypeRaw =
+            faceType.rawValue
 
         self.lastFourDigits =
             lastFourDigits
@@ -572,6 +588,12 @@ final class BankCard {
             code?.isEmpty == false
             ? code!
             : "CNY"
+    }
+
+
+    var faceType: CardFaceType {
+
+        CardFaceType(rawValue: faceTypeRaw ?? "") ?? .standard
     }
 
 

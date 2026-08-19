@@ -15,6 +15,9 @@ struct BankCardOCRResult {
     let cardType:
         BankCardType?
 
+    let faceType:
+        CardFaceType
+
     let recognizedText:
         String
 
@@ -310,6 +313,13 @@ enum CardImageOCRService {
                     fullText
             )
 
+        let faceType =
+            detectCardFaceType(
+                text: fullText,
+                hasNumber: cardNumber != nil,
+                isRectangleDetected: extraction != nil
+            )
+
 
         // 不再因为“通用 OCR 没扫到文字”直接整次失败。
         // 只要银行卡本体成功提取，或者后四位/银行/类型任一识别成功，
@@ -340,6 +350,8 @@ enum CardImageOCRService {
                 lastFourDigits,
             cardType:
                 cardType,
+            faceType:
+                faceType,
             recognizedText:
                 fullText,
             extractedCardImageData:
@@ -352,6 +364,29 @@ enum CardImageOCRService {
         )
     }
 
+
+    private static func detectCardFaceType(
+        text: String,
+        hasNumber: Bool,
+        isRectangleDetected: Bool
+    ) -> CardFaceType {
+
+        let lower = text.lowercased()
+
+        if lower.contains("virtual") || lower.contains("digital") || lower.contains("online") || lower.contains("虚拟") {
+            return .virtual
+        }
+
+        if hasNumber {
+            return .standard
+        }
+
+        if isRectangleDetected && (lower.contains("visa") || lower.contains("master") || lower.contains("银联") || lower.contains("卡")) {
+            return .noNumber
+        }
+
+        return .art
+    }
 
     // MARK: - 多通道 OCR
 

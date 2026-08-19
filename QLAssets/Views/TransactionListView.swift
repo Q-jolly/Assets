@@ -1182,7 +1182,7 @@ struct TransactionListView:
         switch dateFilter {
 
         case .recent30Days:
-            return transactionDate >= Calendar.current.date(byAdding: .day, value: -30, to: Date())!
+            return date >= Calendar.current.date(byAdding: .day, value: -30, to: Date())!
 
         case .all:
 
