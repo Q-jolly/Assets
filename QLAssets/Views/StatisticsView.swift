@@ -53,6 +53,10 @@ struct StatisticsView: View {
         Date?
 
     @State
+    private var selectedTrendMonth:
+        Date?
+
+    @State
     private var selectedCategoryID:
         String?
 
@@ -223,6 +227,9 @@ struct StatisticsView: View {
         }
 
         selectedDay =
+            nil
+
+        selectedTrendMonth =
             nil
 
         selectedCategoryID =
@@ -580,6 +587,27 @@ struct StatisticsView: View {
             .sorted {
                 $0.date <
                 $1.date
+            }
+    }
+
+
+    private var selectedDailyExpensePoint:
+        DailyExpensePoint? {
+
+        guard let selectedDay
+        else {
+            return nil
+        }
+
+        return dailyExpensePoints
+            .first {
+
+                AppTime.calendar
+                    .isDate(
+                        $0.date,
+                        inSameDayAs:
+                            selectedDay
+                    )
             }
     }
 
@@ -994,6 +1022,107 @@ struct StatisticsView: View {
                     )
                 ]
             }
+    }
+
+
+    private var selectedTrendPoints:
+        [MonthlyFlowPoint] {
+
+        guard let selectedTrendMonth
+        else {
+            return []
+        }
+
+        let selectedComponents =
+            AppTime.calendar
+                .dateComponents(
+                    [
+                        .year,
+                        .month
+                    ],
+                    from:
+                        selectedTrendMonth
+                )
+
+        return sixMonthFlowPoints
+            .filter {
+
+                let components =
+                    AppTime.calendar
+                        .dateComponents(
+                            [
+                                .year,
+                                .month
+                            ],
+                            from:
+                                $0.month
+                        )
+
+                return
+                    components.year ==
+                    selectedComponents.year &&
+                    components.month ==
+                    selectedComponents.month
+            }
+    }
+
+
+    private var selectedTrendExpense:
+        Double {
+
+        selectedTrendPoints
+            .first {
+                $0.type ==
+                "支出"
+            }?
+            .amount ??
+            0
+    }
+
+
+    private var selectedTrendIncome:
+        Double {
+
+        selectedTrendPoints
+            .first {
+                $0.type ==
+                "收入"
+            }?
+            .amount ??
+            0
+    }
+
+
+    private var selectedTrendTitle:
+        String {
+
+        guard let selectedTrendMonth
+        else {
+            return ""
+        }
+
+        let formatter =
+            DateFormatter()
+
+        formatter.calendar =
+            AppTime.calendar
+
+        formatter.timeZone =
+            AppTime.timeZone
+
+        formatter.locale =
+            Locale(
+                identifier:
+                    "zh_CN"
+            )
+
+        formatter.dateFormat =
+            "yyyy年M月"
+
+        return formatter.string(
+            from:
+                selectedTrendMonth
+        )
     }
 
 
@@ -1901,6 +2030,17 @@ struct StatisticsView: View {
                         dailyExpensePoints
                     ) { point in
 
+                        let isSelected =
+                            selectedDay !=
+                            nil &&
+                            AppTime.calendar
+                                .isDate(
+                                    point.date,
+                                    inSameDayAs:
+                                        selectedDay ??
+                                        point.date
+                                )
+
                         BarMark(
                             x:
                                 .value(
@@ -1915,17 +2055,34 @@ struct StatisticsView: View {
                                     point.amount
                                 )
                         )
-                        .cornerRadius(4)
+                        .cornerRadius(
+                            4
+                        )
+                        .foregroundStyle(
+                            isSelected
+                            ? Color.accentColor
+                            : selectedDay ==
+                                nil
+                                ? Color.accentColor
+                                    .opacity(
+                                        0.82
+                                    )
+                                : Color.accentColor
+                                    .opacity(
+                                        0.28
+                                    )
+                        )
                     }
 
 
-                    if let selectedDay {
+                    if let point =
+                        selectedDailyExpensePoint {
 
                         RuleMark(
                             x:
                                 .value(
                                     "选择日期",
-                                    selectedDay,
+                                    point.date,
                                     unit:
                                         .day
                                 )
@@ -1933,6 +2090,61 @@ struct StatisticsView: View {
                         .foregroundStyle(
                             .secondary
                         )
+                        .annotation(
+                            position:
+                                .top,
+                            spacing:
+                                8
+                        ) {
+
+                            VStack(
+                                spacing:
+                                    2
+                            ) {
+
+                                Text(
+                                    selectedDayTitle
+                                )
+                                .font(
+                                    .caption2
+                                )
+                                .foregroundStyle(
+                                    .secondary
+                                )
+
+                                Text(
+                                    point.amount,
+                                    format:
+                                        .currency(
+                                            code:
+                                                "CNY"
+                                        )
+                                )
+                                .font(
+                                    .caption
+                                        .bold()
+                                )
+                            }
+                            .padding(
+                                .horizontal,
+                                9
+                            )
+                            .padding(
+                                .vertical,
+                                6
+                            )
+                            .background(
+                                .regularMaterial
+                            )
+                            .clipShape(
+                                RoundedRectangle(
+                                    cornerRadius:
+                                        9,
+                                    style:
+                                        .continuous
+                                )
+                            )
+                        }
                     }
                 }
                 .frame(
@@ -1962,6 +2174,18 @@ struct StatisticsView: View {
                     value:
                         $selectedDay
                 )
+                .onChange(
+                    of:
+                        selectedDay
+                ) { _, value in
+
+                    if value !=
+                        nil {
+
+                        HapticFeedback
+                            .selection()
+                    }
+                }
 
 
                 if selectedDay != nil {
@@ -2243,38 +2467,130 @@ struct StatisticsView: View {
             )
 
 
-            Chart(
-                sixMonthFlowPoints
-            ) { point in
+            Chart {
 
-                BarMark(
-                    x:
-                        .value(
-                            "月份",
-                            point.month,
-                            unit:
-                                .month
-                        ),
-                    y:
-                        .value(
-                            "金额",
-                            point.amount
+                ForEach(
+                    sixMonthFlowPoints
+                ) { point in
+
+                    BarMark(
+                        x:
+                            .value(
+                                "月份",
+                                point.month,
+                                unit:
+                                    .month
+                            ),
+                        y:
+                            .value(
+                                "金额",
+                                point.amount
+                            )
+                    )
+                    .position(
+                        by:
+                            .value(
+                                "类型",
+                                point.type
+                            )
+                    )
+                    .foregroundStyle(
+                        by:
+                            .value(
+                                "类型",
+                                point.type
+                            )
+                    )
+                    .opacity(
+                        selectedTrendMonth ==
+                            nil
+                        ? 1
+                        : selectedTrendPoints
+                            .contains {
+                                $0.id ==
+                                point.id
+                            }
+                            ? 1
+                            : 0.32
+                    )
+                }
+
+
+                if let selectedTrendMonth {
+
+                    RuleMark(
+                        x:
+                            .value(
+                                "选择月份",
+                                selectedTrendMonth,
+                                unit:
+                                    .month
+                            )
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                    .annotation(
+                        position:
+                            .top,
+                        spacing:
+                            8
+                    ) {
+
+                        VStack(
+                            alignment:
+                                .leading,
+                            spacing:
+                                3
+                        ) {
+
+                            Text(
+                                selectedTrendTitle
+                            )
+                            .font(
+                                .caption2
+                            )
+                            .foregroundStyle(
+                                .secondary
+                            )
+
+                            Text(
+                                "收入 \(selectedTrendIncome.formatted(.currency(code: "CNY")))"
+                            )
+                            .font(
+                                .caption
+                                    .bold()
+                            )
+
+                            Text(
+                                "支出 \(selectedTrendExpense.formatted(.currency(code: "CNY")))"
+                            )
+                            .font(
+                                .caption
+                                    .bold()
+                            )
+                        }
+                        .padding(
+                            .horizontal,
+                            9
                         )
-                )
-                .position(
-                    by:
-                        .value(
-                            "类型",
-                            point.type
+                        .padding(
+                            .vertical,
+                            6
                         )
-                )
-                .foregroundStyle(
-                    by:
-                        .value(
-                            "类型",
-                            point.type
+                        .background(
+                            .regularMaterial
                         )
-                )
+                        .clipShape(
+                            RoundedRectangle(
+                                cornerRadius:
+                                    9,
+                                style:
+                                    .continuous
+                            )
+                        )
+                    }
+                }
             }
             .frame(
                 height: 230
@@ -2305,6 +2621,22 @@ struct StatisticsView: View {
                 alignment:
                     .leading
             )
+            .chartXSelection(
+                value:
+                    $selectedTrendMonth
+            )
+            .onChange(
+                of:
+                    selectedTrendMonth
+            ) { _, value in
+
+                if value !=
+                    nil {
+
+                    HapticFeedback
+                        .selection()
+                }
+            }
         }
         .padding()
         .background(

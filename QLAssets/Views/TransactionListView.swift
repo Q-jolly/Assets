@@ -1369,6 +1369,20 @@ struct TransactionListView:
 
 struct TransactionRowView: View {
 
+    @AppStorage(
+        CategoryStore
+            .expenseKey
+    )
+    private var expenseCategoriesStored =
+        ""
+
+    @AppStorage(
+        CategoryStore
+            .incomeKey
+    )
+    private var incomeCategoriesStored =
+        ""
+
     let transaction:
         TransactionRecord
 
@@ -1382,6 +1396,32 @@ struct TransactionRowView: View {
         String? = nil
 
 
+    private var categoryIcon:
+        String {
+
+        CategoryAppearance
+            .icon(
+                for:
+                    transaction,
+                expenseStored:
+                    expenseCategoriesStored,
+                incomeStored:
+                    incomeCategoriesStored
+            )
+    }
+
+
+    private var categoryColor:
+        Color {
+
+        CategoryAppearance
+            .color(
+                for:
+                    transaction
+            )
+    }
+
+
     var body: some View {
 
         HStack(
@@ -1392,9 +1432,10 @@ struct TransactionRowView: View {
 
                 Circle()
                     .fill(
-                        Color(
-                            .secondarySystemBackground
-                        )
+                        categoryColor
+                            .opacity(
+                                0.14
+                            )
                     )
                     .frame(
                         width: 44,
@@ -1403,9 +1444,18 @@ struct TransactionRowView: View {
 
                 Image(
                     systemName:
-                        transaction
-                            .type
-                            .icon
+                        categoryIcon
+                )
+                .font(
+                    .system(
+                        size:
+                            18,
+                        weight:
+                            .semibold
+                    )
+                )
+                .foregroundStyle(
+                    categoryColor
                 )
             }
 
