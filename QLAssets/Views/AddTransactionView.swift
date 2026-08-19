@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import UIKit
 
 
 struct AddTransactionView: View {
@@ -120,11 +121,6 @@ struct AddTransactionView: View {
     @State
     private var showErrorAlert =
         false
-
-    @FocusState
-    private var isAmountFocused:
-        Bool
-
 
     @AppStorage(
         CategoryStore
@@ -271,25 +267,6 @@ struct AddTransactionView: View {
         .navigationTitle(
             "记一笔"
         )
-        .toolbar {
-
-            ToolbarItemGroup(
-                placement:
-                    .keyboard
-            ) {
-
-                Spacer()
-
-                Button("完成") {
-
-                    isAmountFocused =
-                        false
-                }
-                .fontWeight(
-                    .semibold
-                )
-            }
-        }
         .onAppear {
 
             handleAppear()
@@ -475,19 +452,21 @@ struct AddTransactionView: View {
                 )
 
 
-                TextField(
-                    "0.00",
+                ReliableDecimalTextField(
                     text:
-                        $amountText
+                        $amountText,
+                    placeholder:
+                        "0.00",
+                    font:
+                        .systemFont(
+                            ofSize: 28,
+                            weight: .bold
+                        ),
+                    alignment:
+                        .left
                 )
-                .keyboardType(
-                    .decimalPad
-                )
-                .focused(
-                    $isAmountFocused
-                )
-                .font(
-                    .title2.bold()
+                .frame(
+                    minHeight: 44
                 )
 
 
@@ -1545,10 +1524,23 @@ struct AddTransactionView: View {
     }
 
 
+    private func dismissKeyboard() {
+
+        UIApplication.shared
+            .sendAction(
+                #selector(
+                    UIResponder.resignFirstResponder
+                ),
+                to: nil,
+                from: nil,
+                for: nil
+            )
+    }
+
+
     private func saveTransaction() {
 
-        isAmountFocused =
-            false
+        dismissKeyboard()
 
         guard
             let amount,

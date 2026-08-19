@@ -907,7 +907,17 @@ struct HomeView: View {
                         .vertical,
                         4
                     )
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: .leading
+                    )
+                    .contentShape(
+                        Rectangle()
+                    )
                 }
+                .contentShape(
+                    Rectangle()
+                )
                 .buttonStyle(
                     .plain
                 )

@@ -4043,6 +4043,23 @@ struct EditCardView: View {
         String
 
     @State
+    private var currentDebtCurrencyCode:
+        String
+
+    @State
+    private var debtExchangeRates =
+        ExchangeRateService
+            .cachedSnapshot()
+
+    @State
+    private var isRefreshingDebtRate =
+        false
+
+    @State
+    private var debtRateMessage:
+        String?
+
+    @State
     private var billingDay:
         Int
 
@@ -4166,15 +4183,24 @@ struct EditCardView: View {
         _currentDebtText =
             State(
                 initialValue:
-                    card.currentDebt
-                        .map {
-                            String(
-                                format:
-                                    "%.2f",
-                                $0
-                            )
-                        }
+                    (
+                        card.currentDebtOriginalAmount ??
+                        card.currentDebt
+                    )
+                    .map {
+                        String(
+                            format:
+                                "%.2f",
+                            $0
+                        )
+                    }
                     ?? ""
+            )
+
+        _currentDebtCurrencyCode =
+            State(
+                initialValue:
+                    card.currentDebtCurrencyCode
             )
 
         _billingDay =
@@ -4244,6 +4270,21 @@ struct EditCardView: View {
             .scrollDismissesKeyboard(
                 .interactively
             )
+            .task(
+                id:
+                    debtRateRefreshKey
+            ) {
+
+                await refreshDebtExchangeRateIfNeeded()
+            }
+            .onChange(
+                of:
+                    currentDebtCurrencyCode
+            ) { _, _ in
+
+                debtRateMessage =
+                    nil
+            }
             .onChange(
                 of: selectedCardImage
             ) { _, newItem in
@@ -5106,7 +5147,9 @@ struct EditCardView: View {
             }
 
 
-            HStack {
+            HStack(
+                spacing: 8
+            ) {
 
                 Text(
                     "当前欠款"
@@ -5114,30 +5157,124 @@ struct EditCardView: View {
 
                 Spacer()
 
-                Text("¥")
+                Text(
+                    CurrencyCatalog
+                        .symbol(
+                            for:
+                                currentDebtCurrencyCode
+                        )
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+
+                ReliableDecimalTextField(
+                    text:
+                        $currentDebtText,
+                    placeholder:
+                        "0.00",
+                    font:
+                        .systemFont(
+                            ofSize: 17
+                        ),
+                    alignment:
+                        .right
+                )
+                .frame(
+                    width: 105,
+                    minHeight: 34
+                )
+
+                Picker(
+                    "欠款币种",
+                    selection:
+                        $currentDebtCurrencyCode
+                ) {
+
+                    ForEach(
+                        CurrencyCatalog.supported
+                    ) { currency in
+
+                        Text(
+                            currency.code
+                        )
+                        .tag(
+                            currency.code
+                        )
+                    }
+                }
+                .labelsHidden()
+                .frame(
+                    maxWidth: 78
+                )
+            }
+
+
+            if currentDebtCurrencyCode !=
+                "CNY" {
+
+                if let estimate =
+                    currentDebtCNYEstimate {
+
+                    LabeledContent(
+                        "人民币估值"
+                    ) {
+
+                        Text(
+                            formattedCNY(
+                                estimate
+                            )
+                        )
+                        .fontWeight(
+                            .semibold
+                        )
+                    }
+                }
+
+
+                if let rate =
+                    selectedDebtRateToCNY {
+
+                    Text(
+                        debtRateSummaryText(
+                            rate: rate
+                        )
+                    )
+                    .font(
+                        .caption
+                    )
                     .foregroundStyle(
                         .secondary
                     )
 
-                TextField(
-                    "0.00",
-                    text:
-                        $currentDebtText
-                )
-                .keyboardType(
-                    .decimalPad
-                )
-                .multilineTextAlignment(
-                    .trailing
-                )
-                .focused(
-                    $focusedField,
-                    equals:
-                        .currentDebt
-                )
-                .frame(
-                    maxWidth: 130
-                )
+                } else if isRefreshingDebtRate {
+
+                    Label(
+                        "正在查询银行实时汇率…",
+                        systemImage:
+                            "arrow.triangle.2.circlepath"
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
+
+
+                if let debtRateMessage {
+
+                    Text(
+                        debtRateMessage
+                    )
+                    .font(
+                        .caption
+                    )
+                    .foregroundStyle(
+                        .secondary
+                    )
+                }
             }
 
 
@@ -5184,15 +5321,216 @@ struct EditCardView: View {
     private var canSave:
         Bool {
 
-        !bankName
-            .trimmingCharacters(
-                in:
-                    .whitespacesAndNewlines
+        let basicValid =
+            !bankName
+                .trimmingCharacters(
+                    in:
+                        .whitespacesAndNewlines
+                )
+                .isEmpty
+            &&
+            lastFourDigits.count ==
+                4
+
+
+        guard basicValid
+        else {
+            return false
+        }
+
+
+        guard
+            cardType ==
+                .credit,
+            parsedAmount(
+                currentDebtText
+            ) != nil,
+            currentDebtCurrencyCode !=
+                "CNY"
+        else {
+            return true
+        }
+
+
+        return selectedDebtRateToCNY !=
+            nil
+    }
+
+
+    private var debtRateRefreshKey:
+        String {
+
+        currentDebtCurrencyCode +
+            "|" +
+            bankName
+    }
+
+
+    private var selectedDebtRateToCNY:
+        Double? {
+
+        if currentDebtCurrencyCode ==
+            "CNY" {
+
+            return 1
+        }
+
+
+        if let fresh =
+            debtExchangeRates
+                .rateToCNY(
+                    for:
+                        currentDebtCurrencyCode
+                ) {
+
+            return fresh
+        }
+
+
+        if currentDebtCurrencyCode ==
+            card.currentDebtCurrencyCode {
+
+            return card
+                .currentDebtExchangeRateToCNY
+        }
+
+
+        return nil
+    }
+
+
+    private var currentDebtCNYEstimate:
+        Double? {
+
+        guard
+            let amount =
+                parsedAmount(
+                    currentDebtText
+                ),
+            let rate =
+                selectedDebtRateToCNY
+        else {
+            return nil
+        }
+
+
+        return amount *
+            rate
+    }
+
+
+    private func formattedCNY(
+        _ amount:
+            Double
+    ) -> String {
+
+        String(
+            format:
+                "¥%.2f",
+            amount
+        )
+    }
+
+
+    private func debtRateSummaryText(
+        rate:
+            Double
+    ) -> String {
+
+        let rateText =
+            String(
+                format:
+                    "%.4f",
+                rate
             )
-            .isEmpty
-        &&
-        lastFourDigits.count ==
-            4
+
+        return "1 " +
+            currentDebtCurrencyCode +
+            " ≈ ¥" +
+            rateText +
+            " · " +
+            debtExchangeRates.sourceName
+    }
+
+
+    private func refreshDebtExchangeRateIfNeeded() async {
+
+        guard currentDebtCurrencyCode !=
+            "CNY"
+        else {
+
+            debtRateMessage =
+                nil
+
+            return
+        }
+
+
+        if debtExchangeRates
+            .rateToCNY(
+                for:
+                    currentDebtCurrencyCode
+            ) != nil,
+           Date()
+            .timeIntervalSince(
+                debtExchangeRates.fetchedAt
+            ) <
+            15 * 60 {
+
+            return
+        }
+
+
+        isRefreshingDebtRate =
+            true
+
+        defer {
+            isRefreshingDebtRate =
+                false
+        }
+
+
+        do {
+
+            let provider =
+                ExchangeRateService
+                    .preferredProvider(
+                        for:
+                            bankName
+                    )
+
+            debtExchangeRates =
+                try await ExchangeRateService
+                    .refresh(
+                        provider:
+                            provider
+                    )
+
+
+            if debtExchangeRates
+                .rateToCNY(
+                    for:
+                        currentDebtCurrencyCode
+                ) == nil {
+
+                debtRateMessage =
+                    "暂未获取到该币种汇率，请稍后重试。"
+
+            } else {
+
+                debtRateMessage =
+                    nil
+            }
+
+        } catch {
+
+            if selectedDebtRateToCNY ==
+                nil {
+
+                debtRateMessage =
+                    "暂时无法获取实时汇率，请联网后重试。"
+            }
+        }
     }
 
 
@@ -5235,10 +5573,32 @@ struct EditCardView: View {
                     creditLimitText
                 )
 
-            card.currentDebt =
+            let originalDebt =
                 parsedAmount(
                     currentDebtText
                 )
+
+            let debtRate =
+                selectedDebtRateToCNY ??
+                1
+
+            card.currentDebt =
+                originalDebt.map {
+                    $0 * debtRate
+                }
+
+            card.currentDebtOriginalAmount =
+                originalDebt
+
+            card.currentDebtCurrencyCodeRaw =
+                originalDebt == nil
+                ? nil
+                : currentDebtCurrencyCode
+
+            card.currentDebtExchangeRateToCNY =
+                originalDebt == nil
+                ? nil
+                : debtRate
 
             card.billingDay =
                 billingDay
@@ -5252,6 +5612,15 @@ struct EditCardView: View {
                 nil
 
             card.currentDebt =
+                nil
+
+            card.currentDebtOriginalAmount =
+                nil
+
+            card.currentDebtCurrencyCodeRaw =
+                nil
+
+            card.currentDebtExchangeRateToCNY =
                 nil
 
             card.billingDay =

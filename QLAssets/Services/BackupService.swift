@@ -148,6 +148,15 @@ struct BackupBankCard:
     let currentDebt:
         Double?
 
+    let currentDebtOriginalAmount:
+        Double?
+
+    let currentDebtCurrencyCodeRaw:
+        String?
+
+    let currentDebtExchangeRateToCNY:
+        Double?
+
     let billingDay:
         Int?
 
@@ -359,6 +368,12 @@ enum BackupService {
                                 $0.creditLimit,
                             currentDebt:
                                 $0.currentDebt,
+                            currentDebtOriginalAmount:
+                                $0.currentDebtOriginalAmount,
+                            currentDebtCurrencyCodeRaw:
+                                $0.currentDebtCurrencyCodeRaw,
+                            currentDebtExchangeRateToCNY:
+                                $0.currentDebtExchangeRateToCNY,
                             billingDay:
                                 $0.billingDay,
                             repaymentDay:
@@ -637,6 +652,12 @@ enum BackupService {
                         item.creditLimit,
                     currentDebt:
                         item.currentDebt,
+                    currentDebtOriginalAmount:
+                        item.currentDebtOriginalAmount,
+                    currentDebtCurrencyCode:
+                        item.currentDebtCurrencyCodeRaw,
+                    currentDebtExchangeRateToCNY:
+                        item.currentDebtExchangeRateToCNY,
                     billingDay:
                         item.billingDay,
                     repaymentDay:

@@ -420,7 +420,17 @@ final class BankCard {
      */
     var creditLimit: Double?
 
+    // 当前欠款的人民币等值，用于总负债、可用额度和统计口径。
     var currentDebt: Double?
+
+    // 手动编辑欠款时保留用户输入的原币金额与记账汇率。
+    // 自动产生新的信用卡消费/还款后，会重新归一为 CNY，
+    // 避免多币种交易聚合后仍显示一份已经过期的原币金额。
+    var currentDebtOriginalAmount: Double?
+
+    var currentDebtCurrencyCodeRaw: String?
+
+    var currentDebtExchangeRateToCNY: Double?
 
     var billingDay: Int?
 
@@ -442,6 +452,9 @@ final class BankCard {
         theme: CardTheme = .midnight,
         creditLimit: Double? = nil,
         currentDebt: Double? = nil,
+        currentDebtOriginalAmount: Double? = nil,
+        currentDebtCurrencyCode: String? = nil,
+        currentDebtExchangeRateToCNY: Double? = nil,
         billingDay: Int? = nil,
         repaymentDay: Int? = nil,
         sortOrder: Int = 0
@@ -476,6 +489,30 @@ final class BankCard {
             self.currentDebt =
                 currentDebt
 
+            let debtCode =
+                currentDebtCurrencyCode?
+                    .trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    )
+                    .uppercased()
+
+            self.currentDebtCurrencyCodeRaw =
+                debtCode?.isEmpty == false
+                ? debtCode
+                : (currentDebt == nil ? nil : "CNY")
+
+            self.currentDebtOriginalAmount =
+                currentDebtOriginalAmount ?? currentDebt
+
+            self.currentDebtExchangeRateToCNY =
+                self.currentDebtCurrencyCodeRaw == nil
+                ? nil
+                : (
+                    self.currentDebtCurrencyCodeRaw == "CNY"
+                    ? 1
+                    : currentDebtExchangeRateToCNY
+                )
+
             self.billingDay =
                 billingDay
 
@@ -490,6 +527,15 @@ final class BankCard {
             self.currentDebt =
                 nil
 
+            self.currentDebtOriginalAmount =
+                nil
+
+            self.currentDebtCurrencyCodeRaw =
+                nil
+
+            self.currentDebtExchangeRateToCNY =
+                nil
+
             self.billingDay =
                 nil
 
@@ -502,6 +548,22 @@ final class BankCard {
 
         self.createdAt =
             Date()
+    }
+
+
+    var currentDebtCurrencyCode: String {
+
+        let code =
+            currentDebtCurrencyCodeRaw?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                .uppercased()
+
+        return
+            code?.isEmpty == false
+            ? code!
+            : "CNY"
     }
 
 

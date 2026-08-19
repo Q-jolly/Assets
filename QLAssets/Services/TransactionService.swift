@@ -411,6 +411,10 @@ enum TransactionService {
                 ) +
                 amount
 
+            markDebtAsCNY(
+                card
+            )
+
             return true
 
 
@@ -457,6 +461,10 @@ enum TransactionService {
                     currentDebt - amount,
                     0
                 )
+
+            markDebtAsCNY(
+                card
+            )
 
             return true
 
@@ -591,6 +599,10 @@ enum TransactionService {
                     0
                 )
 
+            markDebtAsCNY(
+                card
+            )
+
             return true
 
 
@@ -626,6 +638,10 @@ enum TransactionService {
                     0
                 ) +
                 amount
+
+            markDebtAsCNY(
+                card
+            )
 
             return true
 
@@ -861,4 +877,38 @@ enum TransactionService {
         transaction.date =
             snapshot.date
     }
+
+    private static func markDebtAsCNY(
+        _ card:
+            BankCard
+    ) {
+
+        guard
+            let debt =
+                card.currentDebt
+        else {
+
+            card.currentDebtOriginalAmount =
+                nil
+
+            card.currentDebtCurrencyCodeRaw =
+                nil
+
+            card.currentDebtExchangeRateToCNY =
+                nil
+
+            return
+        }
+
+
+        card.currentDebtOriginalAmount =
+            debt
+
+        card.currentDebtCurrencyCodeRaw =
+            "CNY"
+
+        card.currentDebtExchangeRateToCNY =
+            1
+    }
+
 }
