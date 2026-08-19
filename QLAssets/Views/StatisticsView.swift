@@ -2655,10 +2655,47 @@ private struct CategoryDonutBreakdownView: View {
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
             // 给左右折线和文字留下空间。
+            let maxCalloutLabelWidth =
+                points
+                    .map {
+                        estimatedCalloutLabelWidth(
+                            text:
+                                "\($0.category) \($0.percentageText)"
+                        )
+                    }
+                    .max() ??
+                    88
+
+            let sidePaddingForCallout:
+                CGFloat = 12
+
+            let labelGapForCallout:
+                CGFloat = 7
+
+            let safeCircleExtra:
+                CGFloat = 18
+
+            let minimumHorizontalForCallout:
+                CGFloat = 52
+
+            let requiredSideSpace =
+                maxCalloutLabelWidth +
+                sidePaddingForCallout +
+                labelGapForCallout +
+                safeCircleExtra +
+                minimumHorizontalForCallout
+
+            let widthLimitedRadius =
+                max(
+                    128,
+                    width /
+                    2 -
+                    requiredSideSpace
+                )
+
             let outerRadius =
                 min(
-                    width *
-                    0.285,
+                    widthLimitedRadius,
                     height *
                     0.31
                 )
@@ -3260,7 +3297,7 @@ private struct CategoryDonutBreakdownView: View {
             CGFloat = 6
 
         let horizontalSegmentLength:
-            CGFloat = 58
+            CGFloat = 68
 
         let outerElbowGap:
             CGFloat = 22
@@ -3641,16 +3678,16 @@ private struct CategoryDonutBreakdownView: View {
         // 第一段必须至少向扇区法线外侧推进这么多。
         // 这是避免斜线重新穿进饼图的关键约束。
         let minimumNormalProjection:
-            CGFloat = 14
+            CGFloat = 18
 
         // 折点本身必须位于饼图外缘之外。
         let safeRadius =
             outerRadius +
-            14
+            18
 
         // 水平段必须有足够可见长度。
         let minimumHorizontalLength:
-            CGFloat = 44
+            CGFloat = 52
 
         let labelGap:
             CGFloat = 7
