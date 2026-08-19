@@ -347,12 +347,9 @@ struct AddTransactionView: View {
                         ) {
 
                             Text(
-                                converted,
-                                format:
-                                    .currency(
-                                        code:
-                                            "CNY"
-                                    )
+                                cnyEstimateText(
+                                    converted
+                                )
                             )
                             .fontWeight(
                                 .semibold
@@ -365,7 +362,10 @@ struct AddTransactionView: View {
                         selectedCurrencyRate {
 
                         Text(
-                            "1 \(currencyCode) ≈ ¥\(rate.formatted(.number.precision(.fractionLength(4)))) · \(exchangeRates.sourceName)"
+                            exchangeRateSummaryText(
+                                rate:
+                                    rate
+                            )
                         )
                         .font(
                             .caption
@@ -937,6 +937,40 @@ struct AddTransactionView: View {
         return creditCards.first {
             $0.id == id
         }
+    }
+
+
+    private func cnyEstimateText(
+        _ value:
+            Double
+    ) -> String {
+
+        String(
+            format:
+                "¥%.2f",
+            value
+        )
+    }
+
+
+    private func exchangeRateSummaryText(
+        rate:
+            Double
+    ) -> String {
+
+        let rateText =
+            String(
+                format:
+                    "%.4f",
+                rate
+            )
+
+        return "1 " +
+            currencyCode +
+            " ≈ ¥" +
+            rateText +
+            " · " +
+            exchangeRates.sourceName
     }
 
 
