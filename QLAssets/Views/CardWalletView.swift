@@ -5182,7 +5182,7 @@ struct EditCardView: View {
                 )
                 .frame(
                     width: 105,
-                    minHeight: 34
+                    height: 34
                 )
 
                 Picker(
