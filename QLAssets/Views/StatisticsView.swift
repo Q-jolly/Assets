@@ -25,6 +25,13 @@ struct StatisticsView: View {
         ""
 
     @AppStorage(
+        CategoryStore
+            .incomeKey
+    )
+    private var incomeCategoriesStored =
+        ""
+
+    @AppStorage(
         CategoryBudgetStore
             .storageKey
     )
@@ -59,6 +66,11 @@ struct StatisticsView: View {
     @State
     private var selectedCategoryID:
         String?
+
+    @State
+    private var dailyChartGestureMode:
+        DailyChartGestureMode =
+            .undetermined
 
 
     // MARK: - 月份
@@ -759,6 +771,80 @@ struct StatisticsView: View {
     }
 
 
+    private func updateDailySelection(
+        at location:
+            CGPoint,
+        proxy:
+            ChartProxy,
+        geometry:
+            GeometryProxy
+    ) {
+
+        guard
+            let plotFrame =
+                proxy.plotFrame
+        else {
+            return
+        }
+
+
+        let frame =
+            geometry[
+                plotFrame
+            ]
+
+
+        guard
+            frame.contains(
+                location
+            )
+        else {
+            return
+        }
+
+
+        let x =
+            location.x -
+            frame.minX
+
+
+        guard
+            let rawDate:
+                Date =
+                    proxy.value(
+                        atX:
+                            x
+                    ),
+            let nearest =
+                nearestDailyExpenseDate(
+                    to:
+                        rawDate
+                )
+        else {
+            return
+        }
+
+
+        if let selectedDay,
+           AppTime.calendar
+            .isDate(
+                selectedDay,
+                inSameDayAs:
+                    nearest
+            ) {
+
+            return
+        }
+
+
+        selectedDay =
+            nearest
+
+        HapticFeedback
+            .selection()
+    }
+
+
     private var selectedDayTransactions:
         [TransactionRecord] {
 
@@ -1341,9 +1427,6 @@ struct StatisticsView: View {
             if value !=
                 nil {
 
-                selectedDay =
-                    nil
-
                 selectedCategoryID =
                     nil
             }
@@ -1355,9 +1438,6 @@ struct StatisticsView: View {
 
             if value !=
                 nil {
-
-                selectedDay =
-                    nil
 
                 selectedTrendMonth =
                     nil
@@ -1397,7 +1477,6 @@ struct StatisticsView: View {
     private func clearChartFocus() {
 
         guard
-            selectedDay != nil ||
             selectedTrendMonth != nil ||
             selectedCategoryID != nil
         else {
@@ -1405,9 +1484,9 @@ struct StatisticsView: View {
         }
 
 
-        selectedDay =
-            nil
-
+        // 每日支出属于“固定选择”：
+        // 页面滚动、其它图表失焦时继续保留；
+        // 只有用户点“取消选择”或切换统计月份时才清除。
         selectedTrendMonth =
             nil
 
@@ -2367,74 +2446,106 @@ struct StatisticsView: View {
                             .contentShape(
                                 Rectangle()
                             )
+                            // 单击：选中最近有支出的日期。
+                            .simultaneousGesture(
+                                SpatialTapGesture()
+                                    .onEnded {
+                                        value in
+
+                                        updateDailySelection(
+                                            at:
+                                                value.location,
+                                            proxy:
+                                                proxy,
+                                            geometry:
+                                                geometry
+                                        )
+                                    }
+                            )
+                            // 按住左右拖动：快速切换日期。
+                            // 先锁定手势方向；纵向拖动完全不更新日期，
+                            // 让外层 ScrollView 正常滚动。
                             .simultaneousGesture(
                                 DragGesture(
                                     minimumDistance:
-                                        0
+                                        8
                                 )
                                 .onChanged {
                                     value in
 
-                                    guard
-                                        let plotFrame =
-                                            proxy.plotFrame
-                                    else {
-
-                                        return
-                                    }
-
-
-                                    let frame =
-                                        geometry[
-                                            plotFrame
-                                        ]
-
-
-                                    guard
-                                        frame.contains(
-                                            value.location
+                                    let horizontal =
+                                        abs(
+                                            value.translation.width
                                         )
-                                    else {
 
-                                        return
+                                    let vertical =
+                                        abs(
+                                            value.translation.height
+                                        )
+
+
+                                    if dailyChartGestureMode ==
+                                        .undetermined {
+
+                                        let dominantDistance =
+                                            max(
+                                                horizontal,
+                                                vertical
+                                            )
+
+
+                                        guard
+                                            dominantDistance >=
+                                                10
+                                        else {
+                                            return
+                                        }
+
+
+                                        if horizontal >
+                                            vertical *
+                                            1.25 {
+
+                                            dailyChartGestureMode =
+                                                .horizontal
+
+                                        } else if vertical >
+                                                    horizontal *
+                                                    1.10 {
+
+                                            dailyChartGestureMode =
+                                                .vertical
+
+                                        } else {
+
+                                            return
+                                        }
                                     }
-
-
-                                    let x =
-                                        value.location.x -
-                                        frame.minX
 
 
                                     guard
-                                        let rawDate:
-                                            Date =
-                                                proxy.value(
-                                                    atX:
-                                                        x
-                                                ),
-                                        let nearest =
-                                            nearestDailyExpenseDate(
-                                                to:
-                                                    rawDate
-                                            )
+                                        dailyChartGestureMode ==
+                                            .horizontal
                                     else {
 
                                         return
                                     }
 
 
-                                    if selectedDay !=
-                                        nearest {
-
-                                        selectedDay =
-                                            nearest
-
-                                        HapticFeedback
-                                            .selection()
-                                    }
+                                    updateDailySelection(
+                                        at:
+                                            value.location,
+                                        proxy:
+                                            proxy,
+                                        geometry:
+                                            geometry
+                                    )
                                 }
                                 .onEnded {
                                     _ in
+
+                                    dailyChartGestureMode =
+                                        .undetermined
                                 }
                             )
                     }
@@ -2537,6 +2648,12 @@ struct StatisticsView: View {
                 }
             }
         }
+        .contentShape(
+            Rectangle()
+        )
+        // 明细区域不附加横向 DragGesture。
+        // 从图标、文字、金额等任意位置开始上下拖动，
+        // 都由最外层 ScrollView 负责页面滚动。
     }
 
 
@@ -3083,22 +3200,51 @@ struct StatisticsView: View {
             spacing: 10
         ) {
 
-            Image(
-                systemName:
-                    transaction.type.icon
-            )
-            .frame(
-                width: 28,
-                height: 28
-            )
-            .background(
-                Color(
-                    .tertiarySystemBackground
-                )
-            )
-            .clipShape(
+            ZStack {
+
                 Circle()
-            )
+                    .fill(
+                        CategoryAppearance
+                            .color(
+                                for:
+                                    transaction
+                            )
+                    )
+                    .frame(
+                        width:
+                            38,
+                        height:
+                            38
+                    )
+
+
+                Image(
+                    systemName:
+                        CategoryAppearance
+                            .icon(
+                                for:
+                                    transaction,
+                                expenseStored:
+                                    expenseCategoriesStored,
+                                incomeStored:
+                                    incomeCategoriesStored
+                            )
+                    )
+                    .symbolRenderingMode(
+                        .monochrome
+                    )
+                    .font(
+                        .system(
+                            size:
+                                16,
+                            weight:
+                                .semibold
+                        )
+                    )
+                    .foregroundStyle(
+                        .white
+                    )
+            }
 
 
             VStack(
@@ -3188,6 +3334,18 @@ struct StatisticsView: View {
                 150
         )
     }
+}
+
+
+// MARK: - 每日柱状图手势方向
+
+private enum DailyChartGestureMode {
+
+    case undetermined
+
+    case horizontal
+
+    case vertical
 }
 
 
