@@ -109,6 +109,17 @@ enum CardImageOCRService {
             originalImage
         )
 
+        // 竖版银行卡（动漫卡、校园卡、定制卡）常见：
+        // 正面文字方向与横版不同，额外尝试旋转识别。
+        if originalImage.size.height > originalImage.size.width {
+            if let rotated90 = rotateImage(originalImage, degrees: 90) {
+                recognitionImages.append(rotated90)
+            }
+            if let rotated270 = rotateImage(originalImage, degrees: 270) {
+                recognitionImages.append(rotated270)
+            }
+        }
+
 
         var allObservations:
             [VNRecognizedTextObservation] = []
@@ -1666,6 +1677,47 @@ enum CardImageOCRService {
         return
             sum % 10 ==
             0
+    }
+
+
+
+    // MARK: - 竖版银行卡辅助旋转
+
+    private static func rotateImage(
+        _ image: UIImage,
+        degrees: CGFloat
+    ) -> UIImage? {
+
+        let radians = degrees * .pi / 180
+
+        let newSize =
+            image.size.applying(
+                CGAffineTransform(rotationAngle: radians)
+            )
+
+        let renderer =
+            UIGraphicsImageRenderer(
+                size:
+                    CGSize(
+                        width: abs(newSize.width),
+                        height: abs(newSize.height)
+                    )
+            )
+
+        return renderer.image { context in
+            context.cgContext.translateBy(
+                x: abs(newSize.width) / 2,
+                y: abs(newSize.height) / 2
+            )
+            context.cgContext.rotate(by: radians)
+            image.draw(
+                at:
+                    CGPoint(
+                        x: -image.size.width / 2,
+                        y: -image.size.height / 2
+                    )
+            )
+        }
     }
 
 
