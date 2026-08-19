@@ -2,6 +2,14 @@ import Foundation
 import UIKit
 
 
+enum CardFaceSide:
+    String {
+
+    case front
+    case back
+}
+
+
 enum CardFaceImageStore {
 
     static let didChangeNotification =
@@ -40,12 +48,22 @@ enum CardFaceImageStore {
 
     private static func fileURL(
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide
     ) -> URL {
 
-        directoryURL
+        let filename =
+            side ==
+                .front
+            ? cardID.uuidString
+            : cardID.uuidString +
+                "-back"
+
+
+        return directoryURL
             .appendingPathComponent(
-                cardID.uuidString
+                filename
             )
             .appendingPathExtension(
                 "jpg"
@@ -57,7 +75,9 @@ enum CardFaceImageStore {
         imageData:
             Data,
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide = .front
     ) throws {
 
         guard
@@ -109,7 +129,9 @@ enum CardFaceImageStore {
             to:
                 fileURL(
                     for:
-                        cardID
+                        cardID,
+                    side:
+                        side
                 ),
             options:
                 .atomic
@@ -125,7 +147,9 @@ enum CardFaceImageStore {
 
     static func image(
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide = .front
     ) -> UIImage? {
 
         guard
@@ -134,13 +158,16 @@ enum CardFaceImageStore {
                     contentsOf:
                         fileURL(
                             for:
-                                cardID
+                                cardID,
+                            side:
+                                side
                         )
                 )
         else {
 
             return nil
         }
+
 
         return UIImage(
             data:
@@ -151,14 +178,18 @@ enum CardFaceImageStore {
 
     static func imageData(
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide = .front
     ) -> Data? {
 
         try? Data(
             contentsOf:
                 fileURL(
                     for:
-                        cardID
+                        cardID,
+                    side:
+                        side
                 )
         )
     }
@@ -166,7 +197,9 @@ enum CardFaceImageStore {
 
     static func exists(
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide = .front
     ) -> Bool {
 
         FileManager.default
@@ -174,7 +207,9 @@ enum CardFaceImageStore {
                 atPath:
                     fileURL(
                         for:
-                            cardID
+                            cardID,
+                        side:
+                            side
                     )
                     .path
             )
@@ -183,14 +218,19 @@ enum CardFaceImageStore {
 
     static func delete(
         for cardID:
-            UUID
+            UUID,
+        side:
+            CardFaceSide = .front
     ) {
 
         let url =
             fileURL(
                 for:
-                    cardID
+                    cardID,
+                side:
+                    side
             )
+
 
         if FileManager.default
             .fileExists(
@@ -204,6 +244,49 @@ enum CardFaceImageStore {
                         at:
                             url
                     )
+        }
+
+
+        postChange(
+            cardID:
+                cardID
+        )
+    }
+
+
+    static func deleteAll(
+        for cardID:
+            UUID
+    ) {
+
+        for side in
+            [
+                CardFaceSide.front,
+                CardFaceSide.back
+            ] {
+
+            let url =
+                fileURL(
+                    for:
+                        cardID,
+                    side:
+                        side
+                )
+
+
+            if FileManager.default
+                .fileExists(
+                    atPath:
+                        url.path
+                ) {
+
+                try?
+                    FileManager.default
+                        .removeItem(
+                            at:
+                                url
+                        )
+            }
         }
 
 
@@ -264,17 +347,11 @@ enum CardFaceImageStore {
         let targetSize =
             CGSize(
                 width:
-                    max(
-                        1,
-                        size.width *
-                        scale
-                    ),
+                    size.width *
+                    scale,
                 height:
-                    max(
-                        1,
-                        size.height *
-                        scale
-                    )
+                    size.height *
+                    scale
             )
 
 

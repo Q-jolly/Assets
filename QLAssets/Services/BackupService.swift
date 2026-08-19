@@ -141,6 +141,9 @@ struct BackupBankCard:
 
     let faceImageData:
         Data?
+
+    let backFaceImageData:
+        Data?
 }
 
 
@@ -195,7 +198,7 @@ enum BackupRestoreError:
 enum BackupService {
 
     static let currentVersion =
-        3
+        4
 
 
     static func makeBackup(
@@ -333,7 +336,17 @@ enum BackupService {
                                 CardFaceImageStore
                                     .imageData(
                                         for:
-                                            $0.id
+                                            $0.id,
+                                        side:
+                                            .front
+                                    ),
+                            backFaceImageData:
+                                CardFaceImageStore
+                                    .imageData(
+                                        for:
+                                            $0.id,
+                                        side:
+                                            .back
                                     )
                         )
                     }
@@ -469,7 +482,7 @@ enum BackupService {
             existingCards {
 
             CardFaceImageStore
-                .delete(
+                .deleteAll(
                     for:
                         card.id
                 )
@@ -657,22 +670,34 @@ enum BackupService {
         for item in
             backup.cards {
 
-            guard
-                let data =
-                    item.faceImageData
-            else {
+            if let data =
+                item.faceImageData {
 
-                continue
+                try CardFaceImageStore
+                    .save(
+                        imageData:
+                            data,
+                        for:
+                            item.id,
+                        side:
+                            .front
+                    )
             }
 
 
-            try CardFaceImageStore
-                .save(
-                    imageData:
-                        data,
-                    for:
-                        item.id
-                )
+            if let backData =
+                item.backFaceImageData {
+
+                try CardFaceImageStore
+                    .save(
+                        imageData:
+                            backData,
+                        for:
+                            item.id,
+                        side:
+                            .back
+                    )
+            }
         }
 
 

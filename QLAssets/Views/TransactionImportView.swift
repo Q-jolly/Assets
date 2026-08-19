@@ -193,17 +193,19 @@ struct TransactionImportView:
                         .tabSeparatedText,
                         .plainText,
                         .zip
-                    ]
+                    ],
+                allowsMultipleSelection:
+                    true
             ) { result in
 
                 switch result {
 
                 case .success(
-                    let url
+                    let urls
                 ):
 
-                    loadFile(
-                        url
+                    loadFiles(
+                        urls
                     )
 
                 case .failure(
@@ -263,7 +265,7 @@ struct TransactionImportView:
             } label: {
 
                 Label(
-                    "选择 Numbers 导出的 ZIP / CSV",
+                    "选择一个或多个 ZIP / CSV",
                     systemImage:
                         "doc.badge.plus"
                 )
@@ -316,7 +318,7 @@ struct TransactionImportView:
         } footer: {
 
             Text(
-                "Numbers 在含多个表格时会把 CSV 导出成 ZIP。本版可直接选择这个 ZIP，会自动找到“交易明细”表并忽略月支出/月收入汇总；也支持单个 CSV、TSV 和 Numbers 剪贴板。"
+                "支持一次选择多个 Numbers 导出的 ZIP、CSV 或 TSV。ZIP 会自动找到“交易明细”并忽略月支出/月收入汇总；多个文件会合并预览后一次导入，并继续按现有规则跳过重复账单。"
             )
         }
     }
@@ -717,94 +719,205 @@ struct TransactionImportView:
 
     // MARK: - 读取
 
-    private func loadFile(
-        _ url:
-            URL
+    private func loadFiles(
+        _ urls:
+            [URL]
     ) {
 
         errorMessage =
             nil
 
 
-        let accessed =
-            url
-                .startAccessingSecurityScopedResource()
+        guard
+            !urls.isEmpty
+        else {
+            return
+        }
 
 
-        defer {
+        var parsedTables:
+            [TransactionImportTable] = []
 
-            if accessed {
+        var detailParts:
+            [String] = []
 
+        var failedNames:
+            [String] = []
+
+
+        for url in
+            urls {
+
+            let accessed =
                 url
-                    .stopAccessingSecurityScopedResource()
+                    .startAccessingSecurityScopedResource()
+
+
+            defer {
+
+                if accessed {
+
+                    url
+                        .stopAccessingSecurityScopedResource()
+                }
             }
+
+
+            do {
+
+                let data =
+                    try Data(
+                        contentsOf:
+                            url
+                    )
+
+
+                if url.pathExtension
+                    .lowercased() ==
+                    "zip" {
+
+                    let selection =
+                        try TransactionImportService
+                            .extractNumbersZIP(
+                                data:
+                                    data
+                            )
+
+
+                    let parsedTable =
+                        try TransactionImportService
+                            .parseTable(
+                                text:
+                                    selection.text
+                            )
+
+
+                    parsedTables.append(
+                        parsedTable
+                    )
+
+
+                    var detail =
+                        "\(url.lastPathComponent) → \(selection.entryName)"
+
+
+                    if selection.ignoredCSVCount >
+                        0 {
+
+                        detail +=
+                            "（忽略 \(selection.ignoredCSVCount) 个汇总 CSV）"
+                    }
+
+
+                    detailParts.append(
+                        detail
+                    )
+
+                } else {
+
+                    let decoded =
+                        try TransactionImportService
+                            .decodeText(
+                                data:
+                                    data
+                            )
+
+
+                    let parsedTable =
+                        try TransactionImportService
+                            .parseTable(
+                                text:
+                                    decoded
+                            )
+
+
+                    parsedTables.append(
+                        parsedTable
+                    )
+
+                    detailParts.append(
+                        url.lastPathComponent
+                    )
+                }
+
+            } catch {
+
+                failedNames.append(
+                    url.lastPathComponent
+                )
+            }
+        }
+
+
+        guard
+            !parsedTables.isEmpty
+        else {
+
+            errorMessage =
+                "所选文件都没有解析成功，请确认是 Numbers 导出的 ZIP、CSV 或 TSV。"
+
+            return
         }
 
 
         do {
 
-            let data =
-                try Data(
-                    contentsOf:
-                        url
-                )
-
-
-            if url.pathExtension
-                .lowercased() ==
-                "zip" {
-
-                let selection =
-                    try TransactionImportService
-                        .extractNumbersZIP(
-                            data:
-                                data
-                        )
-
-
-                try loadText(
-                    selection.text,
-                    source:
-                        url
-                            .lastPathComponent
-                )
-
-
-                sourceDetail =
-                    "已自动选择：\(selection.entryName)" +
-                    (
-                        selection.ignoredCSVCount >
-                        0
-                        ? "；忽略 \(selection.ignoredCSVCount) 个汇总 CSV。"
-                        : ""
+            let merged =
+                try TransactionImportService
+                    .mergeTables(
+                        parsedTables
                     )
+
+
+            table =
+                merged
+
+            mapping =
+                TransactionImportService
+                    .autoMapping(
+                        headers:
+                            merged.headers
+                    )
+
+
+            if parsedTables.count ==
+                1,
+               urls.count ==
+                1 {
+
+                sourceName =
+                    urls[
+                        0
+                    ]
+                    .lastPathComponent
 
             } else {
 
-                let text =
-                    try TransactionImportService
-                        .decodeText(
-                            data:
-                                data
-                        )
+                sourceName =
+                    "\(parsedTables.count) 个文件"
+            }
 
 
-                try loadText(
-                    text,
-                    source:
-                        url
-                            .lastPathComponent
+            sourceDetail =
+                detailParts.joined(
+                    separator:
+                        "\n"
                 )
 
-                sourceDetail =
-                    ""
+
+            if !failedNames.isEmpty {
+
+                errorMessage =
+                    "有 \(failedNames.count) 个文件未能解析：\(failedNames.joined(separator: "、"))"
             }
+
+
+            refreshPreview()
 
         } catch {
 
             errorMessage =
-                error
-                    .localizedDescription
+                error.localizedDescription
         }
     }
 

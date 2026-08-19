@@ -971,6 +971,10 @@ struct FlippableBankCardView: View {
     private var customFaceImage:
         UIImage?
 
+    @State
+    private var customBackFaceImage:
+        UIImage?
+
 
     init(
         card: BankCard,
@@ -1385,22 +1389,70 @@ struct FlippableBankCardView: View {
             CardFaceImageStore
                 .image(
                     for:
-                        card.id
+                        card.id,
+                    side:
+                        .front
+                )
+
+        customBackFaceImage =
+            CardFaceImageStore
+                .image(
+                    for:
+                        card.id,
+                    side:
+                        .back
                 )
     }
 
 
     // MARK: 背面
 
+    @ViewBuilder
     private var cardBack:
         some View {
 
-        GeometryReader {
-            geometry in
+        if let customBackFaceImage {
 
-            ZStack {
+            Image(
+                uiImage:
+                    customBackFaceImage
+            )
+            .resizable()
+            .scaledToFill()
+            .frame(
+                maxWidth:
+                    .infinity,
+                maxHeight:
+                    .infinity
+            )
+            .clipShape(
+                RoundedRectangle(
+                    cornerRadius:
+                        BankCardLayout
+                            .cornerRadius,
+                    style:
+                        .continuous
+                )
+            )
+            .shadow(
+                color:
+                    .black.opacity(
+                        0.15
+                    ),
+                radius:
+                    14,
+                y:
+                    8
+            )
 
-                CardThemeBackground(
+        } else {
+
+            GeometryReader {
+                geometry in
+
+                ZStack {
+
+                    CardThemeBackground(
                     theme:
                         card.theme
                 )
@@ -1594,6 +1646,7 @@ struct FlippableBankCardView: View {
                 radius: 14,
                 y: 8
             )
+            }
         }
     }
 
@@ -1949,7 +2002,19 @@ struct AddCardView: View {
         Data?
 
     @State
+    private var selectedBackFaceImage:
+        PhotosPickerItem?
+
+    @State
+    private var customBackFaceImageData:
+        Data?
+
+    @State
     private var faceMessage:
+        String?
+
+    @State
+    private var backFaceMessage:
         String?
 
     @FocusState
@@ -2021,6 +2086,22 @@ struct AddCardView: View {
                 Task {
 
                     await loadCustomFace(
+                        newItem
+                    )
+                }
+            }
+            .onChange(
+                of: selectedBackFaceImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await recognizeBackFaceImage(
                         newItem
                     )
                 }
@@ -2341,6 +2422,59 @@ struct AddCardView: View {
             }
 
 
+            Divider()
+
+
+            PhotosPicker(
+                selection:
+                    $selectedBackFaceImage,
+                matching:
+                    .images
+            ) {
+
+                Label(
+                    customBackFaceImageData ==
+                        nil
+                    ? "识别银行卡背面卡面"
+                    : "重新识别银行卡背面",
+                    systemImage:
+                        "rectangle.portrait.and.arrow.right"
+                )
+            }
+
+
+            if customBackFaceImageData !=
+                nil {
+
+                Button(
+                    "移除背面自定义卡面",
+                    role:
+                        .destructive
+                ) {
+
+                    customBackFaceImageData =
+                        nil
+
+                    backFaceMessage =
+                        "保存后将恢复默认银行卡背面。"
+                }
+            }
+
+
+            if let backFaceMessage {
+
+                Text(
+                    backFaceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+
             if let faceMessage {
 
                 Text(
@@ -2363,7 +2497,7 @@ struct AddCardView: View {
         } footer: {
 
             Text(
-                "自定义卡面图片只保存在本机。App 会自动压缩图片，银行卡号仍只保存后四位。"
+                "正面和背面卡面都只保存在本机。背面图片会自动检测银行卡边框并透视矫正，不会上传。银行卡号仍只保存后四位。"
             )
         }
     }
@@ -2658,6 +2792,76 @@ struct AddCardView: View {
     }
 
 
+    @MainActor
+    private func recognizeBackFaceImage(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        backFaceMessage =
+            "正在识别银行卡背面..."
+
+
+        defer {
+
+            selectedBackFaceImage =
+                nil
+        }
+
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    )
+            else {
+
+                backFaceMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            guard
+                let extraction =
+                    CardImageProcessor
+                        .extractCardFace(
+                            from:
+                                data
+                        )
+            else {
+
+                backFaceMessage =
+                    "没有识别出银行卡卡面，请尽量使用完整、清晰、正对镜头的银行卡背面照片。"
+
+                return
+            }
+
+
+            customBackFaceImageData =
+                extraction.imageData
+
+            backFaceMessage =
+                extraction.usedRectangleDetection
+                ? "已识别银行卡背面边框并完成透视矫正。"
+                : "未检测到完整边框，已按银行卡比例自动裁切背面卡面。"
+
+
+            HapticFeedback
+                .success()
+
+        } catch {
+
+            backFaceMessage =
+                "读取银行卡背面失败：\(error.localizedDescription)"
+        }
+    }
+
+
     private var creditCardSection:
         some View {
 
@@ -2947,7 +3151,24 @@ struct AddCardView: View {
                         imageData:
                             customFaceImageData,
                         for:
-                            card.id
+                            card.id,
+                        side:
+                            .front
+                    )
+        }
+
+
+        if let customBackFaceImageData {
+
+            try?
+                CardFaceImageStore
+                    .save(
+                        imageData:
+                            customBackFaceImageData,
+                        for:
+                            card.id,
+                        side:
+                            .back
                     )
         }
 
@@ -3509,7 +3730,7 @@ struct CardDetailView: View {
             ) {
 
                 CardFaceImageStore
-                    .delete(
+                    .deleteAll(
                         for:
                             card.id
                     )
@@ -3697,7 +3918,19 @@ struct EditCardView: View {
         Data?
 
     @State
+    private var selectedBackFaceImage:
+        PhotosPickerItem?
+
+    @State
+    private var customBackFaceImageData:
+        Data?
+
+    @State
     private var faceMessage:
+        String?
+
+    @State
+    private var backFaceMessage:
         String?
 
     @FocusState
@@ -3807,7 +4040,21 @@ struct EditCardView: View {
                     CardFaceImageStore
                         .imageData(
                             for:
-                                card.id
+                                card.id,
+                            side:
+                                .front
+                        )
+            )
+
+        _customBackFaceImageData =
+            State(
+                initialValue:
+                    CardFaceImageStore
+                        .imageData(
+                            for:
+                                card.id,
+                            side:
+                                .back
                         )
             )
     }
@@ -3866,6 +4113,22 @@ struct EditCardView: View {
                 Task {
 
                     await loadCustomFace(
+                        newItem
+                    )
+                }
+            }
+            .onChange(
+                of: selectedBackFaceImage
+            ) { _, newItem in
+
+                guard let newItem
+                else {
+                    return
+                }
+
+                Task {
+
+                    await recognizeBackFaceImage(
                         newItem
                     )
                 }
@@ -4197,6 +4460,59 @@ struct EditCardView: View {
             }
 
 
+            Divider()
+
+
+            PhotosPicker(
+                selection:
+                    $selectedBackFaceImage,
+                matching:
+                    .images
+            ) {
+
+                Label(
+                    customBackFaceImageData ==
+                        nil
+                    ? "识别银行卡背面卡面"
+                    : "重新识别银行卡背面",
+                    systemImage:
+                        "rectangle.portrait.and.arrow.right"
+                )
+            }
+
+
+            if customBackFaceImageData !=
+                nil {
+
+                Button(
+                    "移除背面自定义卡面",
+                    role:
+                        .destructive
+                ) {
+
+                    customBackFaceImageData =
+                        nil
+
+                    backFaceMessage =
+                        "保存后将恢复默认银行卡背面。"
+                }
+            }
+
+
+            if let backFaceMessage {
+
+                Text(
+                    backFaceMessage
+                )
+                .font(
+                    .caption
+                )
+                .foregroundStyle(
+                    .secondary
+                )
+            }
+
+
             if let faceMessage {
 
                 Text(
@@ -4219,7 +4535,7 @@ struct EditCardView: View {
         } footer: {
 
             Text(
-                "自定义卡面只保存在本机，不写入 SwiftData，也不会上传。"
+                "正面和背面自定义卡面只保存在本机，不写入 SwiftData，也不会上传。背面识别只提取卡面，不会修改银行卡字段。"
             )
         }
     }
@@ -4474,6 +4790,76 @@ struct EditCardView: View {
     }
 
 
+    @MainActor
+    private func recognizeBackFaceImage(
+        _ item:
+            PhotosPickerItem
+    ) async {
+
+        backFaceMessage =
+            "正在识别银行卡背面..."
+
+
+        defer {
+
+            selectedBackFaceImage =
+                nil
+        }
+
+
+        do {
+
+            guard
+                let data =
+                    try await item.loadTransferable(
+                        type:
+                            Data.self
+                    )
+            else {
+
+                backFaceMessage =
+                    "无法读取这张图片，请换一张再试。"
+
+                return
+            }
+
+
+            guard
+                let extraction =
+                    CardImageProcessor
+                        .extractCardFace(
+                            from:
+                                data
+                        )
+            else {
+
+                backFaceMessage =
+                    "没有识别出银行卡卡面，请尽量使用完整、清晰、正对镜头的银行卡背面照片。"
+
+                return
+            }
+
+
+            customBackFaceImageData =
+                extraction.imageData
+
+            backFaceMessage =
+                extraction.usedRectangleDetection
+                ? "已识别银行卡背面边框并完成透视矫正。"
+                : "未检测到完整边框，已按银行卡比例自动裁切背面卡面。"
+
+
+            HapticFeedback
+                .success()
+
+        } catch {
+
+            backFaceMessage =
+                "读取银行卡背面失败：\(error.localizedDescription)"
+        }
+    }
+
+
     private var creditCardSection:
         some View {
 
@@ -4683,7 +5069,9 @@ struct EditCardView: View {
                         imageData:
                             customFaceImageData,
                         for:
-                            card.id
+                            card.id,
+                        side:
+                            .front
                     )
 
         } else {
@@ -4691,7 +5079,34 @@ struct EditCardView: View {
             CardFaceImageStore
                 .delete(
                     for:
-                        card.id
+                        card.id,
+                    side:
+                        .front
+                )
+        }
+
+
+        if let customBackFaceImageData {
+
+            try?
+                CardFaceImageStore
+                    .save(
+                        imageData:
+                            customBackFaceImageData,
+                        for:
+                            card.id,
+                        side:
+                            .back
+                    )
+
+        } else {
+
+            CardFaceImageStore
+                .delete(
+                    for:
+                        card.id,
+                    side:
+                        .back
                 )
         }
 

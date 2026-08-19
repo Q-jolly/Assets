@@ -184,6 +184,156 @@ enum TransactionImportError:
 
 enum TransactionImportService {
 
+    // MARK: - 多表合并
+
+    static func mergeTables(
+        _ tables:
+            [TransactionImportTable]
+    ) throws
+        -> TransactionImportTable {
+
+        guard
+            let first =
+                tables.first
+        else {
+
+            throw TransactionImportError
+                .emptyFile
+        }
+
+
+        var mergedHeaders:
+            [String] = []
+
+        var seenHeaders =
+            Set<String>()
+
+
+        for table in
+            tables {
+
+            for header in
+                table.headers {
+
+                let normalized =
+                    header.trimmingCharacters(
+                        in:
+                            .whitespacesAndNewlines
+                    )
+
+
+                guard
+                    seenHeaders
+                        .insert(
+                            normalized
+                        )
+                        .inserted
+                else {
+                    continue
+                }
+
+
+                mergedHeaders.append(
+                    normalized
+                )
+            }
+        }
+
+
+        var mergedRows:
+            [[String]] = []
+
+
+        for table in
+            tables {
+
+            let sourceIndexByHeader =
+                Dictionary(
+                    uniqueKeysWithValues:
+                        table.headers
+                            .enumerated()
+                            .map {
+                                index,
+                                header in
+
+                                (
+                                    header.trimmingCharacters(
+                                        in:
+                                            .whitespacesAndNewlines
+                                    ),
+                                    index
+                                )
+                            }
+                )
+
+
+            for row in
+                table.rows {
+
+                var mergedRow =
+                    Array(
+                        repeating:
+                            "",
+                        count:
+                            mergedHeaders.count
+                    )
+
+
+                for (
+                    targetIndex,
+                    header
+                ) in
+                    mergedHeaders
+                        .enumerated() {
+
+                    guard
+                        let sourceIndex =
+                            sourceIndexByHeader[
+                                header
+                            ],
+                        sourceIndex <
+                            row.count
+                    else {
+                        continue
+                    }
+
+
+                    mergedRow[
+                        targetIndex
+                    ] =
+                        row[
+                            sourceIndex
+                        ]
+                }
+
+
+                mergedRows.append(
+                    mergedRow
+                )
+            }
+        }
+
+
+        guard
+            !mergedRows.isEmpty
+        else {
+
+            throw TransactionImportError
+                .emptyFile
+        }
+
+
+        return TransactionImportTable(
+            headers:
+                mergedHeaders,
+            rows:
+                mergedRows,
+            delimiter:
+                first.delimiter
+        )
+    }
+
+
     // MARK: - 读取表格
 
     static func decodeText(
