@@ -98,6 +98,26 @@ struct QLAssetsApp: App {
     private var appLock =
         AppLockManager()
 
+    @AppStorage(
+        AppPreferenceKeys
+            .appearanceMode
+    )
+    private var appearanceModeRaw =
+        AppAppearanceMode
+            .system
+            .rawValue
+
+
+    private var appearanceMode:
+        AppAppearanceMode {
+
+        AppAppearanceMode(
+            rawValue:
+                appearanceModeRaw
+        ) ??
+        .system
+    }
+
 
     var body: some Scene {
 
@@ -114,6 +134,10 @@ struct QLAssetsApp: App {
                 .environment(
                     \.calendar,
                     AppTime.calendar
+                )
+                .preferredColorScheme(
+                    appearanceMode
+                        .colorScheme
                 )
         }
         .modelContainer(

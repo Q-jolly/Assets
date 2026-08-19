@@ -1,10 +1,32 @@
 import SwiftUI
 
+
 struct ContentView: View {
+
+    private enum AppTab:
+        Int,
+        Hashable {
+
+        case home
+        case transactions
+        case add
+        case cards
+        case accounts
+    }
+
+
+    @State
+    private var selectedTab:
+        AppTab =
+            .home
+
 
     var body: some View {
 
-        TabView {
+        TabView(
+            selection:
+                $selectedTab
+        ) {
 
             NavigationStack {
                 HomeView()
@@ -12,9 +34,13 @@ struct ContentView: View {
             .tabItem {
                 Label(
                     "首页",
-                    systemImage: "house.fill"
+                    systemImage:
+                        "house.fill"
                 )
             }
+            .tag(
+                AppTab.home
+            )
 
 
             NavigationStack {
@@ -27,6 +53,9 @@ struct ContentView: View {
                         "list.bullet.rectangle"
                 )
             }
+            .tag(
+                AppTab.transactions
+            )
 
 
             NavigationStack {
@@ -39,6 +68,9 @@ struct ContentView: View {
                         "plus.circle.fill"
                 )
             }
+            .tag(
+                AppTab.add
+            )
 
 
             NavigationStack {
@@ -51,6 +83,9 @@ struct ContentView: View {
                         "creditcard.fill"
                 )
             }
+            .tag(
+                AppTab.cards
+            )
 
 
             NavigationStack {
@@ -63,6 +98,17 @@ struct ContentView: View {
                         "wallet.pass.fill"
                 )
             }
+            .tag(
+                AppTab.accounts
+            )
+        }
+        .onChange(
+            of:
+                selectedTab
+        ) { _, _ in
+
+            HapticFeedback
+                .selection()
         }
     }
 }

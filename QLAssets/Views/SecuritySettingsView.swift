@@ -30,6 +30,22 @@ struct SecuritySettingsView:
         AppLockManager
             .defaultAutomaticLockDelayMinutes
 
+    @AppStorage(
+        AppPreferenceKeys
+            .appearanceMode
+    )
+    private var appearanceModeRaw =
+        AppAppearanceMode
+            .system
+            .rawValue
+
+    @AppStorage(
+        AppPreferenceKeys
+            .hapticsEnabled
+    )
+    private var hapticsEnabled =
+        true
+
 
     @State
     private var pendingLockToggle =
@@ -48,6 +64,62 @@ struct SecuritySettingsView:
         some View {
 
         List {
+
+            Section {
+
+                Picker(
+                    "外观",
+                    selection:
+                        $appearanceModeRaw
+                ) {
+
+                    ForEach(
+                        AppAppearanceMode
+                            .allCases
+                    ) { mode in
+
+                        Label(
+                            mode.rawValue,
+                            systemImage:
+                                mode.icon
+                        )
+                        .tag(
+                            mode.rawValue
+                        )
+                    }
+                }
+
+
+                Toggle(
+                    "触感反馈",
+                    isOn:
+                        $hapticsEnabled
+                )
+                .onChange(
+                    of:
+                        hapticsEnabled
+                ) { _, isEnabled in
+
+                    if isEnabled {
+
+                        HapticFeedback
+                            .selection()
+                    }
+                }
+
+            } header: {
+
+                Text(
+                    "外观与交互"
+                )
+
+            } footer: {
+
+                Text(
+                    "外观可跟随系统，也可以固定为浅色或深色。关闭触感反馈后，标签切换和记账保存不会震动。"
+                )
+            }
+
 
             Section {
 
@@ -221,7 +293,7 @@ struct SecuritySettingsView:
             }
         }
         .navigationTitle(
-            "隐私与安全"
+            "设置"
         )
         .navigationBarTitleDisplayMode(
             .inline

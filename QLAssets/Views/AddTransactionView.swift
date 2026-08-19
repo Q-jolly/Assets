@@ -963,12 +963,18 @@ struct AddTransactionView: View {
 
         if success {
 
+            HapticFeedback
+                .success()
+
             resetForm()
 
             showSavedAlert =
                 true
 
         } else {
+
+            HapticFeedback
+                .error()
 
             showErrorAlert =
                 true
