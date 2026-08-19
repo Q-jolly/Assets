@@ -577,7 +577,9 @@ struct AddTransactionView: View {
                         ) { account in
 
                             Text(
-                                "\(account.name)  \(account.balance.formatted(.currency(code: account.currencyCode)))"
+                                accountPickerLabel(
+                                    account
+                                )
                             )
                             .tag(
                                 Optional(
@@ -935,6 +937,26 @@ struct AddTransactionView: View {
         return creditCards.first {
             $0.id == id
         }
+    }
+
+
+    private func accountPickerLabel(
+        _ account:
+            Account
+    ) -> String {
+
+        let balanceText =
+            account.balance
+                .formatted(
+                    .currency(
+                        code:
+                            account.currencyCode
+                    )
+                )
+
+        return account.name +
+            "  " +
+            balanceText
     }
 
 
@@ -1491,7 +1513,7 @@ struct AddTransactionView: View {
             .timeIntervalSince(
                 exchangeRates.fetchedAt
             ) <
-            5 *
+            15 *
             60 {
 
             return

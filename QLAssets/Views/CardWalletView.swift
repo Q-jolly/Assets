@@ -1307,7 +1307,8 @@ struct FlippableBankCardView: View {
                                     format:
                                         .currency(
                                             code:
-                                                linkedAccount.currencyCode
+                                                account?.currencyCode ??
+                                                "CNY"
                                         )
                                 )
                                 .font(
@@ -1579,7 +1580,9 @@ struct FlippableBankCardView: View {
                                         for:
                                             card,
                                         cards:
-                                            cards
+                                            allCards.isEmpty
+                                            ? [card]
+                                            : allCards
                                     )
                                     )
                             )
@@ -3999,6 +4002,12 @@ struct EditCardView: View {
     )
     private var accounts:
         [Account]
+
+    @Query(
+        sort: \BankCard.createdAt
+    )
+    private var cards:
+        [BankCard]
 
 
     @State

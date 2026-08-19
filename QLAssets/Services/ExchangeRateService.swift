@@ -564,7 +564,7 @@ enum ExchangeRateService {
                     fullRange
             )
             .compactMap {
-                rowMatch in
+                rowMatch -> [String]? in
 
                 guard rowMatch.numberOfRanges >
                     1
@@ -603,7 +603,7 @@ enum ExchangeRateService {
                                 rowRange
                         )
                         .compactMap {
-                            cellMatch in
+                            cellMatch -> String? in
 
                             guard cellMatch.numberOfRanges >
                                 1
