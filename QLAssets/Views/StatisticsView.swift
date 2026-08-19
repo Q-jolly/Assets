@@ -2643,6 +2643,16 @@ private struct CategoryDonutBreakdownView: View {
             let height =
                 proxy.size.height
 
+            let centerYOffset =
+                min(
+                    max(
+                        height *
+                        0.06,
+                        18
+                    ),
+                    26
+                )
+
             let center =
                 CGPoint(
                     x:
@@ -2651,7 +2661,7 @@ private struct CategoryDonutBreakdownView: View {
                     y:
                         height /
                         2 +
-                        25
+                        centerYOffset
                 )
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
@@ -2729,6 +2739,8 @@ private struct CategoryDonutBreakdownView: View {
 
             ZStack {
 
+                // 扇区、中心白圆、中心文字和 callout 计算必须共享同一个 center。
+                // 不依赖 UIScreen / 固定机型尺寸，GeometryReader 尺寸变化时同步适配。
                 // 点击圆环之外的空白区域，视为失去焦点。
                 Color.clear
                     .contentShape(
@@ -2782,6 +2794,9 @@ private struct CategoryDonutBreakdownView: View {
                         height:
                             outerRadius *
                             2
+                    )
+                    .position(
+                        center
                     )
                     .opacity(
                         hasSelection &&
@@ -2866,6 +2881,9 @@ private struct CategoryDonutBreakdownView: View {
                             innerRadius *
                             2
                     )
+                    .position(
+                        center
+                    )
                     .contentShape(
                         Circle()
                     )
@@ -2877,6 +2895,9 @@ private struct CategoryDonutBreakdownView: View {
 
 
                 centerContent
+                    .position(
+                        center
+                    )
                     .zIndex(5)
                     .allowsHitTesting(
                         false
@@ -2903,12 +2924,42 @@ private struct CategoryDonutBreakdownView: View {
                             selectedCategoryID !=
                             nil
 
+                        let radians =
+                            point.midAngle
+                                .radians
+
+                        let selectedStartOffset:
+                            CGFloat =
+                                isSelected
+                                ? (
+                                    9 +
+                                    outerRadius *
+                                    0.035
+                                )
+                                : 0
+
+                        let renderedStart =
+                            CGPoint(
+                                x:
+                                    layout.start.x +
+                                    cos(
+                                        radians
+                                    ) *
+                                    selectedStartOffset,
+                                y:
+                                    layout.start.y +
+                                    sin(
+                                        radians
+                                    ) *
+                                    selectedStartOffset
+                            )
+
 
                         Path { path in
 
                             path.move(
                                 to:
-                                    layout.start
+                                    renderedStart
                             )
 
                             path.addLine(
@@ -2962,7 +3013,7 @@ private struct CategoryDonutBreakdownView: View {
                                     : 5
                             )
                             .position(
-                                layout.start
+                                renderedStart
                             )
                             .zIndex(
                                 isSelected
