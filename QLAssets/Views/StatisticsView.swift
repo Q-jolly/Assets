@@ -639,6 +639,79 @@ struct StatisticsView: View {
     }
 
 
+    private func trendMonth(
+        atX x:
+            CGFloat,
+        width:
+            CGFloat
+    ) -> Date? {
+
+        let months =
+            sixMonthFlowPoints
+                .map {
+                    point in
+
+                    AppTime.calendar
+                        .date(
+                            from:
+                                AppTime.calendar
+                                    .dateComponents(
+                                        [
+                                            .year,
+                                            .month
+                                        ],
+                                        from:
+                                            point.month
+                                    )
+                        ) ??
+                    point.month
+                }
+
+
+        guard
+            !months.isEmpty
+        else {
+
+            return nil
+        }
+
+
+        let progress =
+            min(
+                max(
+                    x /
+                    width,
+                    0
+                ),
+                1
+            )
+
+
+        let index =
+            Int(
+                round(
+                    progress *
+                    CGFloat(
+                        months.count -
+                        1
+                    )
+                )
+            )
+
+
+        return months[
+            min(
+                max(
+                    index,
+                    0
+                ),
+                months.count -
+                1
+            )
+        ]
+    }
+
+
     private func nearestTrendMonth(
         to date:
             Date
@@ -2294,88 +2367,75 @@ struct StatisticsView: View {
                             .contentShape(
                                 Rectangle()
                             )
-                            .highPriorityGesture(
-                                SpatialTapGesture()
-                                    .onEnded {
-                                        value in
+                            .simultaneousGesture(
+                                DragGesture(
+                                    minimumDistance:
+                                        0
+                                )
+                                .onChanged {
+                                    value in
 
-                                        guard
-                                            let plotFrame =
-                                                proxy.plotFrame
-                                        else {
+                                    guard
+                                        let plotFrame =
+                                            proxy.plotFrame
+                                    else {
 
-                                            selectedDay =
-                                                nil
-
-                                            return
-                                        }
-
-
-                                        let frame =
-                                            geometry[
-                                                plotFrame
-                                            ]
-
-
-                                        guard
-                                            frame.contains(
-                                                value.location
-                                            )
-                                        else {
-
-                                            selectedDay =
-                                                nil
-
-                                            return
-                                        }
-
-
-                                        let x =
-                                            value.location.x -
-                                            frame.minX
-
-
-                                        guard
-                                            let rawDate:
-                                                Date =
-                                                    proxy.value(
-                                                        atX:
-                                                            x
-                                                    ),
-                                            let nearest =
-                                                nearestDailyExpenseDate(
-                                                    to:
-                                                        rawDate
-                                                )
-                                        else {
-
-                                            selectedDay =
-                                                nil
-
-                                            return
-                                        }
-
-
-                                        if let selectedDay,
-                                           AppTime.calendar
-                                            .isDate(
-                                                selectedDay,
-                                                inSameDayAs:
-                                                    nearest
-                                            ) {
-
-                                            self.selectedDay =
-                                                nil
-
-                                        } else {
-
-                                            self.selectedDay =
-                                                nearest
-
-                                            HapticFeedback
-                                                .selection()
-                                        }
+                                        return
                                     }
+
+
+                                    let frame =
+                                        geometry[
+                                            plotFrame
+                                        ]
+
+
+                                    guard
+                                        frame.contains(
+                                            value.location
+                                        )
+                                    else {
+
+                                        return
+                                    }
+
+
+                                    let x =
+                                        value.location.x -
+                                        frame.minX
+
+
+                                    guard
+                                        let rawDate:
+                                            Date =
+                                                proxy.value(
+                                                    atX:
+                                                        x
+                                                ),
+                                        let nearest =
+                                            nearestDailyExpenseDate(
+                                                to:
+                                                    rawDate
+                                            )
+                                    else {
+
+                                        return
+                                    }
+
+
+                                    if selectedDay !=
+                                        nearest {
+
+                                        selectedDay =
+                                            nearest
+
+                                        HapticFeedback
+                                            .selection()
+                                    }
+                                }
+                                .onEnded {
+                                    _ in
+                                }
                             )
                     }
                 }
@@ -2890,16 +2950,12 @@ struct StatisticsView: View {
 
 
                                     guard
-                                        let rawDate:
-                                            Date =
-                                                proxy.value(
-                                                    atX:
-                                                        x
-                                                ),
                                         let nearest =
-                                            nearestTrendMonth(
-                                                to:
-                                                    rawDate
+                                            trendMonth(
+                                                atX:
+                                                    x,
+                                                width:
+                                                    frame.width
                                             )
                                     else {
 
