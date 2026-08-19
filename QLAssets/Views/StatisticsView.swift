@@ -1781,7 +1781,7 @@ struct StatisticsView: View {
                         $selectedCategoryID
                 )
                 .frame(
-                    height: 320
+                    height: 350
                 )
 
 
@@ -2650,7 +2650,8 @@ private struct CategoryDonutBreakdownView: View {
                         2,
                     y:
                         height /
-                        2
+                        2 +
+                        15
                 )
 
             // 名称 + 百分比标签比原来更宽，因此主动缩小圆环，
@@ -3382,10 +3383,10 @@ private struct CategoryDonutBreakdownView: View {
 
         let topLimit =
             max(
-                38,
+                32,
                 center.y -
                 outerRadius -
-                34
+                46
             )
 
         let bottomLimit =
@@ -3398,7 +3399,7 @@ private struct CategoryDonutBreakdownView: View {
             )
 
         let minimumGap:
-            CGFloat = 30
+            CGFloat = 34
 
 
         let leftAdjusted =
@@ -3796,6 +3797,8 @@ private struct CategoryDonutBreakdownView: View {
                 adjusted
             )
 
+            // 使用真正绘制后的 lineY 作为下一条的基准，
+            // 避免多个顶部小分类因为半径上限被压到同一行。
             previousLineY =
                 adjusted.end.y
         }
