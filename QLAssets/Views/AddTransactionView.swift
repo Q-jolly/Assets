@@ -319,16 +319,8 @@ struct AddTransactionView: View {
 
             updateForCreditActionChange()
         }
-        .onChange(
-            of:
-                sourceAccountID
-        ) { _, _ in
-
-            if mode ==
-                .transfer {
-
-                synchronizeCurrencyWithCurrentContext()
-            }
+        .onChange(of: sourceAccountID) { _, _ in
+            handleSourceAccountChange()
         }
         .onChange(
             of:
@@ -1409,6 +1401,14 @@ struct AddTransactionView: View {
         synchronizeCurrencyWithCurrentContext()
     }
 
+
+    private func handleSourceAccountChange() {
+        guard mode == .transfer else {
+            return
+        }
+
+        synchronizeCurrencyWithCurrentContext()
+    }
 
     private func updateForModeChange() {
 
