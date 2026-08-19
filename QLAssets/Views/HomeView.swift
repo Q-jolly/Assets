@@ -29,6 +29,12 @@ struct HomeView: View {
     private var monthlyBudget:
         Double = 0
 
+    @AppStorage(
+        "privacy.homeAmountsVisible.v1"
+    )
+    private var homeAmountsVisible =
+        true
+
 
     // MARK: - 资产统计
 
@@ -228,7 +234,11 @@ struct HomeView: View {
                 spacing: 8
             ) {
 
-                Text("净资产")
+                HStack {
+
+                    Text(
+                        "净资产"
+                    )
                     .font(
                         .subheadline
                     )
@@ -236,12 +246,65 @@ struct HomeView: View {
                         .secondary
                     )
 
-                Text(
-                    netAssets,
-                    format:
-                        .currency(
-                            code: "CNY"
+                    Spacer()
+
+                    Button {
+
+                        withAnimation(
+                            .snappy(
+                                duration:
+                                    0.2
+                            )
+                        ) {
+
+                            homeAmountsVisible
+                                .toggle()
+                        }
+
+                        HapticFeedback
+                            .selection()
+
+                    } label: {
+
+                        Image(
+                            systemName:
+                                homeAmountsVisible
+                                ? "eye.fill"
+                                : "eye.slash.fill"
                         )
+                        .font(
+                            .subheadline
+                                .weight(
+                                    .semibold
+                                )
+                        )
+                        .foregroundStyle(
+                            .secondary
+                        )
+                        .frame(
+                            width:
+                                34,
+                            height:
+                                34
+                        )
+                        .contentShape(
+                            Circle()
+                        )
+                    }
+                    .buttonStyle(
+                        .plain
+                    )
+                    .accessibilityLabel(
+                        homeAmountsVisible
+                        ? "隐藏首页金额"
+                        : "显示首页金额"
+                    )
+                }
+
+                Text(
+                    privacyAmountText(
+                        netAssets
+                    )
                 )
                 .font(
                     .system(
@@ -249,6 +312,9 @@ struct HomeView: View {
                         weight: .bold,
                         design: .rounded
                     )
+                )
+                .contentTransition(
+                    .numericText()
                 )
             }
 
@@ -298,6 +364,25 @@ struct HomeView: View {
     }
 
 
+    private func privacyAmountText(
+        _ value:
+            Double
+    ) -> String {
+
+        guard homeAmountsVisible
+        else {
+            return "¥••••••"
+        }
+
+        return value.formatted(
+            .currency(
+                code:
+                    "CNY"
+            )
+        )
+    }
+
+
     private func assetMetric(
         title: String,
         value: Double,
@@ -331,11 +416,9 @@ struct HomeView: View {
                     )
 
                 Text(
-                    value,
-                    format:
-                        .currency(
-                            code: "CNY"
-                        )
+                    privacyAmountText(
+                        value
+                    )
                 )
                 .font(
                     .subheadline.bold()
@@ -374,11 +457,9 @@ struct HomeView: View {
                 )
 
             Text(
-                value,
-                format:
-                    .currency(
-                        code: "CNY"
-                    )
+                privacyAmountText(
+                    value
+                )
             )
             .font(
                 .headline
@@ -461,7 +542,9 @@ struct HomeView: View {
                         Spacer()
 
                         Text(
-                            "¥\(monthlyExpense.formatted(.number.precision(.fractionLength(0)))) / ¥\(monthlyBudget.formatted(.number.precision(.fractionLength(0))))"
+                            homeAmountsVisible
+                            ? "¥\(monthlyExpense.formatted(.number.precision(.fractionLength(0)))) / ¥\(monthlyBudget.formatted(.number.precision(.fractionLength(0))))"
+                            : "••••••"
                         )
                     }
                     .font(
@@ -472,7 +555,9 @@ struct HomeView: View {
                     )
 
 
-                    if let budgetStatusText {
+                    if
+                        homeAmountsVisible,
+                        let budgetStatusText {
 
                         Label(
                             budgetStatusText,
@@ -543,11 +628,9 @@ struct HomeView: View {
                 Spacer()
 
                 Text(
-                    totalDebt,
-                    format:
-                        .currency(
-                            code: "CNY"
-                        )
+                    privacyAmountText(
+                        totalDebt
+                    )
                 )
                 .font(
                     .subheadline.bold()
@@ -619,11 +702,10 @@ struct HomeView: View {
                         ) {
 
                             Text(
-                                card.currentDebt ?? 0,
-                                format:
-                                    .currency(
-                                        code: "CNY"
-                                    )
+                                privacyAmountText(
+                                    card.currentDebt ??
+                                    0
+                                )
                             )
                             .fontWeight(
                                 .semibold
@@ -633,7 +715,9 @@ struct HomeView: View {
                                 card.availableCredit {
 
                                 Text(
-                                    "可用 \(available.formatted(.currency(code: "CNY")))"
+                                    homeAmountsVisible
+                                    ? "可用 \(available.formatted(.currency(code: "CNY")))"
+                                    : "可用 ••••••"
                                 )
                                 .font(
                                     .caption2
@@ -727,6 +811,8 @@ struct HomeView: View {
                         TransactionRowView(
                             transaction:
                                 transaction,
+                            showsAmount:
+                                homeAmountsVisible,
                             accountName:
                                 accountName(
                                     transaction.accountID

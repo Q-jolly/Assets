@@ -1386,6 +1386,9 @@ struct TransactionRowView: View {
     let transaction:
         TransactionRecord
 
+    var showsAmount:
+        Bool = true
+
     var accountName:
         String? = nil
 
@@ -1433,9 +1436,6 @@ struct TransactionRowView: View {
                 Circle()
                     .fill(
                         categoryColor
-                            .opacity(
-                                0.14
-                            )
                     )
                     .frame(
                         width: 44,
@@ -1446,6 +1446,9 @@ struct TransactionRowView: View {
                     systemName:
                         categoryIcon
                 )
+                .symbolRenderingMode(
+                    .monochrome
+                )
                 .font(
                     .system(
                         size:
@@ -1455,7 +1458,7 @@ struct TransactionRowView: View {
                     )
                 )
                 .foregroundStyle(
-                    categoryColor
+                    .white
                 )
             }
 
@@ -1504,7 +1507,9 @@ struct TransactionRowView: View {
 
 
             Text(
-                amountText
+                showsAmount
+                ? amountText
+                : "¥••••"
             )
             .fontWeight(
                 .semibold

@@ -22,6 +22,18 @@ struct QLAssetsBackup:
     let incomeCategoriesStored:
         String?
 
+    let categoryBudgetsStored:
+        String?
+
+    let appearanceModeRaw:
+        String?
+
+    let hapticsEnabled:
+        Bool?
+
+    let homeAmountsVisible:
+        Bool?
+
     let accounts:
         [BackupAccount]
 
@@ -183,7 +195,7 @@ enum BackupRestoreError:
 enum BackupService {
 
     static let currentVersion =
-        2
+        3
 
 
     static func makeBackup(
@@ -221,6 +233,35 @@ enum BackupService {
                                 CategoryStore
                                     .incomeKey
                         ),
+                categoryBudgetsStored:
+                    UserDefaults.standard
+                        .string(
+                            forKey:
+                                CategoryBudgetStore
+                                    .storageKey
+                        ),
+                appearanceModeRaw:
+                    UserDefaults.standard
+                        .string(
+                            forKey:
+                                AppPreferenceKeys
+                                    .appearanceMode
+                        ),
+                hapticsEnabled:
+                    UserDefaults.standard
+                        .object(
+                            forKey:
+                                AppPreferenceKeys
+                                    .hapticsEnabled
+                        ) as?
+                        Bool,
+                homeAmountsVisible:
+                    UserDefaults.standard
+                        .object(
+                            forKey:
+                                "privacy.homeAmountsVisible.v1"
+                        ) as?
+                        Bool,
                 accounts:
                     accounts.map {
                         BackupAccount(
@@ -669,6 +710,61 @@ enum BackupService {
                             .incomeKey
                 )
         }
+
+
+        if let categoryBudgets =
+            backup
+                .categoryBudgetsStored {
+
+            UserDefaults.standard
+                .set(
+                    categoryBudgets,
+                    forKey:
+                        CategoryBudgetStore
+                            .storageKey
+                )
+        }
+
+
+        if let appearanceModeRaw =
+            backup
+                .appearanceModeRaw {
+
+            UserDefaults.standard
+                .set(
+                    appearanceModeRaw,
+                    forKey:
+                        AppPreferenceKeys
+                            .appearanceMode
+                )
+        }
+
+
+        if let hapticsEnabled =
+            backup
+                .hapticsEnabled {
+
+            UserDefaults.standard
+                .set(
+                    hapticsEnabled,
+                    forKey:
+                        AppPreferenceKeys
+                            .hapticsEnabled
+                )
+        }
+
+
+        if let homeAmountsVisible =
+            backup
+                .homeAmountsVisible {
+
+            UserDefaults.standard
+                .set(
+                    homeAmountsVisible,
+                    forKey:
+                        "privacy.homeAmountsVisible.v1"
+                )
+        }
     }
 }
 
@@ -682,12 +778,16 @@ struct QLAssetsBackupDocument:
         [UTType] {
 
         [
-            UTType(
-                exportedAs:
-                    "com.qiaolei.qlassets.backup",
-                conformingTo:
-                    .json
-            ),
+            .json,
+            .data
+        ]
+    }
+
+
+    static var writableContentTypes:
+        [UTType] {
+
+        [
             .json
         ]
     }

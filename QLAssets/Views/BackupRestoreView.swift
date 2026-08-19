@@ -156,7 +156,7 @@ struct BackupRestoreView:
             } footer: {
 
                 Text(
-                    "备份包含账户、账单、银行卡、月度预算和自定义银行卡卡面。完整银行卡号从未保存在 App 中，因此备份也不会包含完整卡号。"
+                    "备份为 JSON 文件，包含账户、账单、银行卡、预算、分类、外观偏好和自定义银行卡卡面。旧版本无扩展名备份也可以直接选择恢复。完整银行卡号从未保存在 App 中，因此备份也不会包含完整卡号。"
                 )
             }
 
@@ -194,10 +194,7 @@ struct BackupRestoreView:
             document:
                 exportDocument,
             contentType:
-                QLAssetsBackupDocument
-                    .readableContentTypes
-                    .first
-                ?? .json,
+                .json,
             defaultFilename:
                 backupFilename
         ) { result in
@@ -230,8 +227,9 @@ struct BackupRestoreView:
             isPresented:
                 $showImporter,
             allowedContentTypes:
-                QLAssetsBackupDocument
-                    .readableContentTypes,
+                [
+                    .item
+                ],
             allowsMultipleSelection:
                 false
         ) { result in
@@ -333,7 +331,8 @@ struct BackupRestoreView:
             formatter.string(
                 from:
                     Date()
-            )
+            ) +
+            ".json"
     }
 
 
