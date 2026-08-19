@@ -2944,12 +2944,14 @@ private struct CategoryDonutBreakdownView: View {
                             : .primary
                         )
                         .padding(
-                            .horizontal,
-                            6
-                        )
-                        .padding(
                             .vertical,
                             3
+                        )
+                        .frame(
+                            width:
+                                layout.labelFrameWidth,
+                            alignment:
+                                .center
                         )
                         .multilineTextAlignment(
                             .center
@@ -3325,7 +3327,7 @@ private struct CategoryDonutBreakdownView: View {
 
         let topLimit =
             max(
-                22,
+                38,
                 center.y -
                 outerRadius -
                 34
@@ -3408,18 +3410,18 @@ private struct CategoryDonutBreakdownView: View {
                 partial, character in
 
                 if character.isASCII {
-                    return partial + 6.6
+                    return partial + 6.4
                 } else {
-                    return partial + 12
+                    return partial + 11.5
                 }
             }
 
         return min(
             max(
-                baseWidth + 12,
+                baseWidth + 10,
                 58
             ),
-            108
+            104
         )
     }
 
@@ -3636,7 +3638,7 @@ private struct CategoryDonutBreakdownView: View {
             CGFloat = 7
 
         let labelSafeMargin:
-            CGFloat = 18
+            CGFloat = 14
 
         let halfLabelWidth =
             result.labelFrameWidth /
