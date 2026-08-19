@@ -496,19 +496,27 @@ final class BankCard {
                     )
                     .uppercased()
 
+            let normalizedDebtCode:
+                String? =
+                    debtCode?.isEmpty == false
+                    ? debtCode
+                    : (
+                        currentDebt == nil
+                        ? nil
+                        : "CNY"
+                    )
+
             self.currentDebtCurrencyCodeRaw =
-                debtCode?.isEmpty == false
-                ? debtCode
-                : (currentDebt == nil ? nil : "CNY")
+                normalizedDebtCode
 
             self.currentDebtOriginalAmount =
                 currentDebtOriginalAmount ?? currentDebt
 
             self.currentDebtExchangeRateToCNY =
-                self.currentDebtCurrencyCodeRaw == nil
+                normalizedDebtCode == nil
                 ? nil
                 : (
-                    self.currentDebtCurrencyCodeRaw == "CNY"
+                    normalizedDebtCode == "CNY"
                     ? 1
                     : currentDebtExchangeRateToCNY
                 )
