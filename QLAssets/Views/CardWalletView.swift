@@ -325,7 +325,7 @@ struct CardWalletView: View {
     }
 
 
-    // MARK: 真正的纵向堆叠 + 纵向切卡
+    // MARK: 卡包竖向堆叠 + 纵向切卡
 
     private var interactiveCardStack:
         some View {
@@ -406,14 +406,20 @@ struct CardWalletView: View {
             }
         }
         .frame(
-            maxWidth:
-                .infinity
-        )
-        .frame(
+            width:
+                cardWidth,
             height:
                 cardStackHeight,
             alignment:
                 .top
+        )
+        // 固定堆叠画布宽度并居中，避免卡片按内容横向排布；
+        // 每张卡仍保持银行卡横向比例，只在 Y 轴逐层露出。
+        .frame(
+            maxWidth:
+                .infinity,
+            alignment:
+                .center
         )
         .contentShape(
             Rectangle()
