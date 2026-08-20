@@ -949,6 +949,81 @@ private enum BankCardLayout {
 }
 
 
+private func cardNumberText(
+    faceType:
+        CardFaceType,
+    lastFour:
+        String
+) -> String {
+
+    let clean =
+        lastFour.filter {
+            $0.isNumber
+        }
+
+    switch faceType {
+
+    case .standard:
+        return clean.isEmpty
+            ? "未提供卡号"
+            : "••••  ••••  ••••  \(String(clean.suffix(4)))"
+
+    case .art:
+        return clean.isEmpty
+            ? "艺术卡 · 未提供卡号"
+            : "艺术卡 · •••• \(String(clean.suffix(4)))"
+
+    case .virtual:
+        return clean.isEmpty
+            ? "虚拟卡 · 未提供尾号"
+            : "虚拟卡 · •••• \(String(clean.suffix(4)))"
+
+    case .noNumber:
+        return "无卡号"
+    }
+}
+
+
+private struct CardFaceTypeBadge: View {
+
+    let faceType:
+        CardFaceType
+
+    @ViewBuilder
+    var body:
+        some View {
+
+        if faceType != .standard {
+
+            Text(
+                faceType.rawValue
+            )
+            .font(
+                .caption2.weight(
+                    .semibold
+                )
+            )
+            .lineLimit(1)
+            .padding(
+                .horizontal,
+                7
+            )
+            .padding(
+                .vertical,
+                4
+            )
+            .background(
+                Color.black.opacity(
+                    0.34
+                ),
+                in:
+                    Capsule()
+            )
+        }
+    }
+}
+
+
 // MARK: - 可翻转银行卡
 
 struct FlippableBankCardView: View {
@@ -1166,7 +1241,12 @@ struct FlippableBankCardView: View {
                             .caption
                         )
                         .opacity(
-                            0.8
+                                0.8
+                        )
+
+                        CardFaceTypeBadge(
+                            faceType:
+                                card.faceType
                         )
                     }
 
@@ -1211,7 +1291,12 @@ struct FlippableBankCardView: View {
 
 
                 Text(
-                    "••••  ••••  ••••  \(formattedLastFour)"
+                    cardNumberText(
+                        faceType:
+                            card.faceType,
+                        lastFour:
+                            card.lastFourDigits
+                    )
                 )
                 .font(
                     .system(
@@ -1619,7 +1704,12 @@ struct FlippableBankCardView: View {
                                 title:
                                     "卡号",
                                 value:
-                                    "•••• \(formattedLastFour)"
+                                    cardNumberText(
+                                        faceType:
+                                            card.faceType,
+                                        lastFour:
+                                            card.lastFourDigits
+                                    )
                             )
                         }
                     }
@@ -1971,6 +2061,11 @@ struct AddCardView: View {
             .debit
 
     @State
+    private var faceType:
+        CardFaceType =
+            .standard
+
+    @State
     private var lastFourDigits =
         ""
 
@@ -2261,8 +2356,32 @@ struct AddCardView: View {
             }
 
 
+            Picker(
+                "卡面类型",
+                selection:
+                    $faceType
+            ) {
+
+                ForEach(
+                    CardFaceType
+                        .allCases,
+                    id: \.self
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+
+
             TextField(
-                "卡号后四位",
+                faceType.requiresLastFour
+                ? "卡号后四位"
+                : "卡号后四位（可选）",
                 text:
                     $lastFourDigits
             )
@@ -2743,9 +2862,14 @@ struct AddCardView: View {
             }
 
 
+            faceType =
+                result.faceType
+
+
             if result.bankName != nil ||
                result.lastFourDigits != nil ||
-               result.cardType != nil {
+               result.cardType != nil ||
+               result.extractedCardImageData != nil {
 
                 var parts:
                     [String] = []
@@ -2774,13 +2898,18 @@ struct AddCardView: View {
                     )
                 }
 
+                parts.append(
+                    result.faceType.rawValue
+                )
+
                 let cardFaceText =
                     result.extractedCardImageData != nil
                     ? " · 已自动提取卡面"
                     : ""
 
                 if result.lastFourDigits ==
-                    nil {
+                    nil,
+                   result.faceType.requiresLastFour {
 
                     recognitionMessage =
                         "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。这类卡面可能没有印卡号，后四位请手动填写后保存。"
@@ -3093,7 +3222,9 @@ struct AddCardView: View {
                 theme:
                     theme,
                 customFaceImage:
-                    previewCustomFaceImage
+                    previewCustomFaceImage,
+                faceType:
+                    faceType
             )
             .listRowInsets(
                 EdgeInsets()
@@ -3120,11 +3251,14 @@ struct AddCardView: View {
                 )
                 .isEmpty
             &&
-            sanitizeLastFour(
-                lastFourDigits
+            (
+                !faceType.requiresLastFour ||
+                sanitizeLastFour(
+                    lastFourDigits
+                )
+                .count ==
+                    4
             )
-            .count ==
-                4
 
         if cardType ==
             .credit {
@@ -3213,7 +3347,9 @@ struct AddCardView: View {
                     ? repaymentDay
                     : nil,
                 sortOrder:
-                    nextOrder
+                    nextOrder,
+                faceType:
+                    faceType
             )
 
 
@@ -3361,6 +3497,9 @@ struct BankCardPreview: View {
     let customFaceImage:
         UIImage?
 
+    let faceType:
+        CardFaceType
+
 
     var body: some View {
 
@@ -3396,7 +3535,12 @@ struct BankCardPreview: View {
                             .caption
                         )
                         .opacity(
-                            0.8
+                                0.8
+                        )
+
+                        CardFaceTypeBadge(
+                            faceType:
+                                faceType
                         )
                     }
 
@@ -3415,7 +3559,12 @@ struct BankCardPreview: View {
 
 
                 Text(
-                    "••••  ••••  ••••  \(displayLastFour)"
+                    cardNumberText(
+                        faceType:
+                            faceType,
+                        lastFour:
+                            lastFourDigits
+                    )
                 )
                 .font(
                     .system(
@@ -3519,17 +3668,6 @@ struct BankCardPreview: View {
     }
 
 
-    private var displayLastFour:
-        String {
-
-        if lastFourDigits.isEmpty {
-
-            return "----"
-        }
-
-        return
-            lastFourDigits
-    }
 }
 
 
@@ -3626,9 +3764,22 @@ struct CardDetailView: View {
 
 
                 LabeledContent(
+                    "卡面类型",
+                    value:
+                        card.faceType
+                            .rawValue
+                )
+
+
+                LabeledContent(
                     "卡号",
                     value:
-                        "•••• \(card.lastFourDigits)"
+                        cardNumberText(
+                            faceType:
+                                card.faceType,
+                            lastFour:
+                                card.lastFourDigits
+                        )
                 )
 
 
@@ -4028,6 +4179,10 @@ struct EditCardView: View {
         BankCardType
 
     @State
+    private var faceType:
+        CardFaceType
+
+    @State
     private var lastFourDigits:
         String
 
@@ -4149,6 +4304,12 @@ struct EditCardView: View {
             State(
                 initialValue:
                     card.cardType
+            )
+
+        _faceType =
+            State(
+                initialValue:
+                    card.faceType
             )
 
         _lastFourDigits =
@@ -4438,7 +4599,9 @@ struct EditCardView: View {
                 theme:
                     theme,
                 customFaceImage:
-                    previewCustomFaceImage
+                    previewCustomFaceImage,
+                faceType:
+                    faceType
             )
             .listRowInsets(
                 EdgeInsets()
@@ -4502,8 +4665,32 @@ struct EditCardView: View {
             }
 
 
+            Picker(
+                "卡面类型",
+                selection:
+                    $faceType
+            ) {
+
+                ForEach(
+                    CardFaceType
+                        .allCases,
+                    id: \.self
+                ) { item in
+
+                    Text(
+                        item.rawValue
+                    )
+                    .tag(
+                        item
+                    )
+                }
+            }
+
+
             TextField(
-                "卡号后四位",
+                faceType.requiresLastFour
+                ? "卡号后四位"
+                : "卡号后四位（可选）",
                 text:
                     $lastFourDigits
             )
@@ -4954,9 +5141,14 @@ struct EditCardView: View {
             }
 
 
+            faceType =
+                result.faceType
+
+
             if result.bankName != nil ||
                result.lastFourDigits != nil ||
-               result.cardType != nil {
+               result.cardType != nil ||
+               result.extractedCardImageData != nil {
 
                 recognitionMessage =
                     "已更新识别到的银行卡信息，请核对后保存。"
@@ -5338,8 +5530,14 @@ struct EditCardView: View {
                 )
                 .isEmpty
             &&
-            lastFourDigits.count ==
-                4
+            (
+                !faceType.requiresLastFour ||
+                sanitizeLastFour(
+                    lastFourDigits
+                )
+                .count ==
+                    4
+            )
 
 
         guard basicValid
@@ -5557,6 +5755,9 @@ struct EditCardView: View {
 
         card.cardTypeRaw =
             cardType.rawValue
+
+        card.faceTypeRaw =
+            faceType.rawValue
 
         card.lastFourDigits =
             sanitizeLastFour(
@@ -5837,8 +6038,18 @@ struct CardManagerView: View {
                                     card.bankName
                                 )
 
+                                CardFaceTypeBadge(
+                                    faceType:
+                                        card.faceType
+                                )
+
                                 Text(
-                                    "•••• \(card.lastFourDigits)"
+                                    cardNumberText(
+                                        faceType:
+                                            card.faceType,
+                                        lastFour:
+                                            card.lastFourDigits
+                                    )
                                 )
                                 .font(
                                     .caption

@@ -382,11 +382,15 @@ final class TransactionRecord {
 
 
 // MARK: - 卡面类型
-enum CardFaceType: String, Codable, CaseIterable {
+enum CardFaceType: String, Codable, CaseIterable, Hashable {
     case standard = "标准银行卡"
     case art = "艺术收藏卡"
     case virtual = "虚拟卡"
     case noNumber = "无号码卡"
+
+    var requiresLastFour: Bool {
+        self == .standard
+    }
 }
 
 // MARK: - BankCard
