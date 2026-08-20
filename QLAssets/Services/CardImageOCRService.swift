@@ -317,6 +317,7 @@ enum CardImageOCRService {
             detectCardFaceType(
                 text: fullText,
                 hasNumber: cardNumber != nil,
+                hasVisibleLastFour: lastFourDigits != nil,
                 isRectangleDetected: extraction != nil
             )
 
@@ -368,20 +369,107 @@ enum CardImageOCRService {
     private static func detectCardFaceType(
         text: String,
         hasNumber: Bool,
+        hasVisibleLastFour: Bool,
         isRectangleDetected: Bool
     ) -> CardFaceType {
 
-        let lower = text.lowercased()
+        let normalizedText =
+            text
+                .lowercased()
+                .replacingOccurrences(
+                    of: "-",
+                    with: " "
+                )
+                .replacingOccurrences(
+                    of: "_",
+                    with: " "
+                )
 
-        if lower.contains("virtual") || lower.contains("digital") || lower.contains("online") || lower.contains("虚拟") {
+        func containsAny(
+            _ keywords: [String]
+        ) -> Bool {
+
+            keywords.contains {
+                normalizedText.contains($0)
+            }
+        }
+
+        // 虚拟卡优先于其他类型。虚拟卡截图通常会同时出现
+        // digital / online / virtual 等明确提示。
+        if containsAny(
+            [
+                "virtual",
+                "digital",
+                "online",
+                "digital card",
+                "online card",
+                "e-card",
+                "e card",
+                "虚拟卡",
+                "数字卡",
+                "电子卡"
+            ]
+        ) {
+
             return .virtual
+        }
+
+        // 艺术联名卡可能仍然印有完整卡号，不能只用“是否有卡号”
+        // 判定为标准银行卡。先识别艺术/联名/限定等强信号。
+        if containsAny(
+            [
+                "艺术收藏卡",
+                "艺术卡",
+                "收藏卡",
+                "联名卡",
+                "纪念卡",
+                "艺术",
+                "收藏",
+                "联名",
+                "纪念",
+                "限定版",
+                "特别版",
+                "limited edition",
+                "special edition",
+                "collector card",
+                "co-branded",
+                "illustration",
+                "artist",
+                "anime"
+            ]
+        ) {
+
+            return .art
         }
 
         if hasNumber {
             return .standard
         }
 
-        if isRectangleDetected && (lower.contains("visa") || lower.contains("master") || lower.contains("银联") || lower.contains("卡")) {
+        // 只有后四位（例如掩码卡号或 7044）而没有完整卡号时，
+        // 不能误报成标准银行卡。实体艺术卡/联名卡最常见的表现就是这种情况。
+        if hasVisibleLastFour {
+            return .art
+        }
+
+        let hasPhysicalCardSignal =
+            containsAny(
+                [
+                    "visa",
+                    "mastercard",
+                    "master card",
+                    "银联",
+                    "debit",
+                    "credit",
+                    "储蓄卡",
+                    "借记卡",
+                    "贷记卡",
+                    "银行卡",
+                    "bank"
+                ]
+            )
+
+        if isRectangleDetected && hasPhysicalCardSignal {
             return .noNumber
         }
 
