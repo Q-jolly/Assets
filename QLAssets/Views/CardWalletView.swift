@@ -370,6 +370,18 @@ struct CardWalletView: View {
                         height:
                             cardHeight
                     )
+                    // 卡包中的所有卡片统一使用银行卡横向画布。
+                    // 额外裁剪，避免竖版艺术卡原图撑开堆叠布局。
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius:
+                                BankCardLayout
+                                    .cornerRadius,
+                            style:
+                                .continuous
+                        )
+                    )
+                    .clipped()
                     .scaleEffect(
                         1 -
                         CGFloat(
@@ -1454,6 +1466,13 @@ struct FlippableBankCardView: View {
             )
             .resizable()
             .scaledToFill()
+            .frame(
+                maxWidth:
+                    .infinity,
+                maxHeight:
+                    .infinity
+            )
+            .clipped()
             .overlay {
 
                 LinearGradient(
@@ -1528,6 +1547,7 @@ struct FlippableBankCardView: View {
                 maxHeight:
                     .infinity
             )
+            .clipped()
             .clipShape(
                 RoundedRectangle(
                     cornerRadius:
@@ -3509,37 +3529,6 @@ struct BankCardPreview: View {
     let faceType:
         CardFaceType
 
-    private var previewAspectRatio:
-        CGFloat {
-
-        guard
-            faceType !=
-                .standard,
-            let customFaceImage,
-            customFaceImage.size.width > 1,
-            customFaceImage.size.height > 1
-        else {
-
-            return BankCardLayout
-                .aspectRatio
-        }
-
-        let imageRatio =
-            customFaceImage.size.width /
-            customFaceImage.size.height
-
-        // 艺术卡/无号码卡可能是竖版卡面，使用真实图片比例，
-        // 不再把整张卡强行塞进横版比例后裁掉上下主体。
-        return min(
-            max(
-                imageRatio,
-                0.45
-            ),
-            2.0
-        )
-    }
-
-
     var body: some View {
 
         ZStack {
@@ -3645,7 +3634,9 @@ struct BankCardPreview: View {
             .padding(22)
         }
         .aspectRatio(
-            previewAspectRatio,
+            // 新增/编辑预览也与卡包及其他银行卡保持统一横向比例。
+            BankCardLayout
+                .aspectRatio,
             contentMode: .fit
         )
         .clipShape(
@@ -3674,6 +3665,13 @@ struct BankCardPreview: View {
             )
             .resizable()
             .scaledToFill()
+            .frame(
+                maxWidth:
+                    .infinity,
+                maxHeight:
+                    .infinity
+            )
+            .clipped()
             .overlay {
 
                 LinearGradient(
