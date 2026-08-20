@@ -50,8 +50,11 @@ enum CardImageProcessor {
             detectAndCorrectCard(
                 from:
                     normalizedImage,
+                // 保存识别结果时保留卡片原始横竖方向。
+                // 竖版艺术卡不能为了卡包横版布局而提前旋转、裁切，
+                // 否则人物和卡面主体会在保存前就丢失。
                 normalizeToLandscape:
-                    true
+                    false
             ),
            let data =
             jpegData(
@@ -560,27 +563,47 @@ enum CardImageProcessor {
         }
 
 
-        let cardRatio =
-            Double(
-                bankCardAspectRatio
-            )
+        // 同时尝试横版和竖版比例。银行 App/钱包截图里的艺术卡
+        // 经常是竖版，不能只按普通银行卡横版比例搜索。
+        let cardRatios =
+            [
+                Double(
+                    bankCardAspectRatio
+                ),
+                1 /
+                Double(
+                    bankCardAspectRatio
+                )
+            ]
 
 
         var bestCandidate:
             ScreenshotCardCandidate?
 
 
-        // Wallet / 银行 App 的卡片通常宽度占屏幕 72%~96%，
-        // 顶部位于屏幕高度 6%~45% 之间。
-        for widthPercent in
-            stride(
-                from:
-                    72,
-                through:
-                    96,
-                by:
-                    2
-            ) {
+        // Wallet / 银行 App 的横版卡片通常宽度占屏幕 72%~96%；
+        // 竖版艺术卡宽度通常更窄，扩大到 45%~84%。
+        for cardRatio in cardRatios {
+
+            let minimumWidthPercent =
+                cardRatio < 1
+                ? 45
+                : 72
+
+            let maximumWidthPercent =
+                cardRatio < 1
+                ? 84
+                : 96
+
+            for widthPercent in
+                stride(
+                    from:
+                        minimumWidthPercent,
+                    through:
+                        maximumWidthPercent,
+                    by:
+                        2
+                ) {
 
             let candidateWidth =
                 max(
@@ -747,6 +770,7 @@ enum CardImageProcessor {
                     }
                 }
             }
+        }
         }
 
 
@@ -1337,17 +1361,24 @@ enum CardImageProcessor {
             width /
             height
 
+        // 根据原图方向选择目标比例：横版银行卡保持 85.60:53.98，
+        // 竖版艺术卡使用反向比例，避免兜底裁切把卡面上下截掉。
+        let targetRatio =
+            width >= height
+            ? bankCardAspectRatio
+            : 1 / bankCardAspectRatio
+
 
         var cropRect:
             CGRect
 
 
         if currentRatio >
-            bankCardAspectRatio {
+            targetRatio {
 
             let targetWidth =
                 height *
-                bankCardAspectRatio
+                targetRatio
 
             cropRect =
                 CGRect(
@@ -1369,7 +1400,7 @@ enum CardImageProcessor {
 
             let targetHeight =
                 width /
-                bankCardAspectRatio
+                targetRatio
 
             cropRect =
                 CGRect(

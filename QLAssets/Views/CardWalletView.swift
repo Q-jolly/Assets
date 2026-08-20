@@ -2824,7 +2824,7 @@ struct AddCardView: View {
                 faceMessage =
                     result.usedRectangleDetection
                     ? "已自动检测银行卡边框、透视矫正并提取为卡面。"
-                    : "未检测到完整银行卡边框，已按银行卡比例自动裁切为卡面。"
+                    : "未检测到完整银行卡边框，已按卡片原始方向自动裁切为卡面。"
 
             } else {
 
@@ -2862,8 +2862,17 @@ struct AddCardView: View {
             }
 
 
+            // “无号码卡”不应同时拥有可识别的后四位；
+            // 这种结果按艺术/联名卡处理，避免预览和识别消息不一致。
+            let resolvedFaceType =
+                result.faceType ==
+                    .noNumber &&
+                result.lastFourDigits != nil
+                ? CardFaceType.art
+                : result.faceType
+
             faceType =
-                result.faceType
+                resolvedFaceType
 
 
             if result.bankName != nil ||
@@ -2899,7 +2908,7 @@ struct AddCardView: View {
                 }
 
                 parts.append(
-                    result.faceType.rawValue
+                    resolvedFaceType.rawValue
                 )
 
                 let cardFaceText =
@@ -2909,7 +2918,7 @@ struct AddCardView: View {
 
                 if result.lastFourDigits ==
                     nil,
-                   result.faceType.requiresLastFour {
+                   resolvedFaceType.requiresLastFour {
 
                     recognitionMessage =
                         "识别成功：\(parts.joined(separator: " · "))\(cardFaceText)。这类卡面可能没有印卡号，后四位请手动填写后保存。"
@@ -3500,6 +3509,36 @@ struct BankCardPreview: View {
     let faceType:
         CardFaceType
 
+    private var previewAspectRatio:
+        CGFloat {
+
+        guard
+            faceType !=
+                .standard,
+            let customFaceImage,
+            customFaceImage.size.width > 1,
+            customFaceImage.size.height > 1
+        else {
+
+            return BankCardLayout
+                .aspectRatio
+        }
+
+        let imageRatio =
+            customFaceImage.size.width /
+            customFaceImage.size.height
+
+        // 艺术卡/无号码卡可能是竖版卡面，使用真实图片比例，
+        // 不再把整张卡强行塞进横版比例后裁掉上下主体。
+        return min(
+            max(
+                imageRatio,
+                0.45
+            ),
+            2.0
+        )
+    }
+
 
     var body: some View {
 
@@ -3606,8 +3645,7 @@ struct BankCardPreview: View {
             .padding(22)
         }
         .aspectRatio(
-            BankCardLayout
-                .aspectRatio,
+            previewAspectRatio,
             contentMode: .fit
         )
         .clipShape(
@@ -5111,7 +5149,7 @@ struct EditCardView: View {
                 faceMessage =
                     result.usedRectangleDetection
                     ? "已自动检测银行卡边框、透视矫正并更新卡面预览。"
-                    : "未检测到完整边框，已按银行卡比例自动裁切并更新卡面预览。"
+                    : "未检测到完整边框，已按卡片原始方向自动裁切并更新卡面预览。"
             }
 
 
@@ -5141,8 +5179,15 @@ struct EditCardView: View {
             }
 
 
+            let resolvedFaceType =
+                result.faceType ==
+                    .noNumber &&
+                result.lastFourDigits != nil
+                ? CardFaceType.art
+                : result.faceType
+
             faceType =
-                result.faceType
+                resolvedFaceType
 
 
             if result.bankName != nil ||
