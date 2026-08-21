@@ -41,6 +41,10 @@ struct CardWalletView: View {
     private var selectedCardIndex =
         0
 
+    @State
+    private var faceImageRevision =
+        0
+
     @GestureState
     private var dragOffset:
         CGFloat = 0
@@ -159,6 +163,18 @@ struct CardWalletView: View {
 
             clampSelectedIndex()
         }
+        .onReceive(
+            NotificationCenter.default
+                .publisher(
+                    for:
+                        CardFaceImageStore
+                            .didChangeNotification
+                )
+        ) { _ in
+
+            faceImageRevision +=
+                1
+        }
     }
 
 
@@ -222,7 +238,7 @@ struct CardWalletView: View {
 
     // MARK: 卡片尺寸
 
-    private var cardWidth:
+    private var maximumCardWidth:
         CGFloat {
 
         min(
@@ -236,11 +252,91 @@ struct CardWalletView: View {
     }
 
 
-    private var cardHeight:
+    private func cardAspectRatio(
+        for card:
+            BankCard
+    ) -> CGFloat {
+
+        BankCardLayout.aspectRatio(
+            for:
+                CardFaceImageStore
+                    .image(
+                        for:
+                            card.id,
+                        side:
+                            .front
+                    )
+        )
+    }
+
+
+    private func cardWidth(
+        for card:
+            BankCard
+    ) -> CGFloat {
+
+        let ratio =
+            cardAspectRatio(
+                for:
+                    card
+            )
+
+        guard ratio <
+                BankCardLayout.aspectRatio
+        else {
+            return maximumCardWidth
+        }
+
+        // 竖版卡面保持原始比例，同时限制高度，避免一张照片占满整个页面。
+        let maximumPortraitHeight =
+            min(
+                max(
+                    UIScreen.main.bounds.height *
+                    0.58,
+                    460
+                ),
+                620
+            )
+
+        return min(
+            maximumCardWidth,
+            max(
+                260,
+                maximumPortraitHeight *
+                ratio
+            )
+        )
+    }
+
+
+    private func cardHeight(
+        for card:
+            BankCard
+    ) -> CGFloat {
+
+        cardWidth(
+            for:
+                card
+        ) /
+        cardAspectRatio(
+            for:
+                card
+        )
+    }
+
+
+    private var stackCanvasWidth:
         CGFloat {
 
-        cardWidth /
-        BankCardLayout.aspectRatio
+        visibleStackedCards
+            .map {
+                cardWidth(
+                    for:
+                        $0
+                )
+            }
+            .max()
+            ?? maximumCardWidth
     }
 
 
@@ -308,20 +404,21 @@ struct CardWalletView: View {
     private var cardStackHeight:
         CGFloat {
 
-        guard visibleStackedCards.count > 1
-        else {
-            return cardHeight
-        }
+        visibleStackedCards
+            .enumerated()
+            .map { relativeIndex, card in
 
-        return
-            cardHeight +
-            CGFloat(
-                max(
-                    visibleStackedCards.count - 2,
-                    0
+                cardHeight(
+                    for:
+                        card
+                ) +
+                baseCardOffset(
+                    relativeIndex:
+                        relativeIndex
                 )
-            ) * cardReveal +
-            bottomTailReveal
+            }
+            .max()
+            ?? 0
     }
 
 
@@ -366,22 +463,16 @@ struct CardWalletView: View {
                     )
                     .frame(
                         width:
-                            cardWidth,
+                            cardWidth(
+                                for:
+                                    card
+                            ),
                         height:
-                            cardHeight
+                            cardHeight(
+                                for:
+                                    card
+                            )
                     )
-                    // 卡包中的所有卡片统一使用银行卡横向画布。
-                    // 额外裁剪，避免竖版艺术卡原图撑开堆叠布局。
-                    .clipShape(
-                        RoundedRectangle(
-                            cornerRadius:
-                                BankCardLayout
-                                    .cornerRadius,
-                            style:
-                                .continuous
-                        )
-                    )
-                    .clipped()
                     .scaleEffect(
                         1 -
                         CGFloat(
@@ -407,19 +498,20 @@ struct CardWalletView: View {
         }
         .frame(
             width:
-                cardWidth,
+                stackCanvasWidth,
             height:
                 cardStackHeight,
             alignment:
                 .top
         )
-        // 固定堆叠画布宽度并居中，避免卡片按内容横向排布；
-        // 每张卡仍保持银行卡横向比例，只在 Y 轴逐层露出。
         .frame(
             maxWidth:
                 .infinity,
             alignment:
                 .center
+        )
+        .id(
+            faceImageRevision
         )
         .contentShape(
             Rectangle()
@@ -964,6 +1056,23 @@ private enum BankCardLayout {
 
     static let cornerRadius:
         CGFloat = 24
+
+    static func aspectRatio(
+        for image:
+            UIImage?
+    ) -> CGFloat {
+
+        guard
+            let image,
+            image.size.width > 0,
+            image.size.height > 0
+        else {
+            return aspectRatio
+        }
+
+        return image.size.width /
+            image.size.height
+    }
 }
 
 
@@ -1149,8 +1258,10 @@ struct FlippableBankCardView: View {
                 )
         }
         .aspectRatio(
-            BankCardLayout
-                .aspectRatio,
+            BankCardLayout.aspectRatio(
+                for:
+                    customFaceImage
+            ),
             contentMode:
                 .fit
         )
@@ -3640,9 +3751,11 @@ struct BankCardPreview: View {
             .padding(22)
         }
         .aspectRatio(
-            // 新增/编辑预览也与卡包及其他银行卡保持统一横向比例。
-            BankCardLayout
-                .aspectRatio,
+            // 新增/编辑预览与卡包使用同一张卡面的原始比例。
+            BankCardLayout.aspectRatio(
+                for:
+                    customFaceImage
+            ),
             contentMode: .fit
         )
         .clipShape(
