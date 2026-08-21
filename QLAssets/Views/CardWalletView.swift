@@ -963,6 +963,23 @@ private enum BankCardLayout {
 
     static let cornerRadius:
         CGFloat = 24
+
+    static func aspectRatio(
+        for image:
+            UIImage?
+    ) -> CGFloat {
+
+        guard
+            let image,
+            image.size.width > 0,
+            image.size.height > 0
+        else {
+            return aspectRatio
+        }
+
+        return image.size.width /
+            image.size.height
+    }
 }
 
 
