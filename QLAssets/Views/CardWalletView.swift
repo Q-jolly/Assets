@@ -352,8 +352,6 @@ struct CardWalletView: View {
                             cards,
                         allowsFlip:
                             relativeIndex == 0,
-                        usesLandscapeWalletFrame:
-                            true,
                         onTap: {
 
                             if relativeIndex >
@@ -963,23 +961,6 @@ private enum BankCardLayout {
 
     static let cornerRadius:
         CGFloat = 24
-
-    static func aspectRatio(
-        for image:
-            UIImage?
-    ) -> CGFloat {
-
-        guard
-            let image,
-            image.size.width > 0,
-            image.size.height > 0
-        else {
-            return aspectRatio
-        }
-
-        return image.size.width /
-            image.size.height
-    }
 }
 
 
@@ -1058,6 +1039,72 @@ private struct CardFaceTypeBadge: View {
 }
 
 
+// MARK: - 实体卡原图渲染
+
+private struct UploadedCardFaceView: View {
+
+    let image:
+        UIImage
+
+    let theme:
+        CardTheme
+
+
+    var body:
+        some View {
+
+        GeometryReader {
+            geometry in
+
+            let isPortrait =
+                image.size.height >
+                image.size.width
+
+            ZStack {
+
+                CardThemeBackground(
+                    theme:
+                        theme
+                )
+
+                Image(
+                    uiImage:
+                        image
+                )
+                .resizable()
+                .scaledToFit()
+                // 先按旋转后的横向画布等比布局，再顺时针旋转 90°。
+                // 不裁剪、不重排原图内容。
+                .frame(
+                    width:
+                        isPortrait
+                        ? geometry.size.height
+                        : geometry.size.width,
+                    height:
+                        isPortrait
+                        ? geometry.size.width
+                        : geometry.size.height
+                )
+                .rotationEffect(
+                    .degrees(
+                        isPortrait
+                        ? -90
+                        : 0
+                    )
+                )
+                .position(
+                    x:
+                        geometry.size.width / 2,
+                    y:
+                        geometry.size.height / 2
+                )
+            }
+            .clipped()
+        }
+    }
+}
+
+
 // MARK: - 可翻转银行卡
 
 struct FlippableBankCardView: View {
@@ -1072,9 +1119,6 @@ struct FlippableBankCardView: View {
         [BankCard]
 
     let allowsFlip:
-        Bool
-
-    let usesLandscapeWalletFrame:
         Bool
 
     let onTap:
@@ -1098,7 +1142,6 @@ struct FlippableBankCardView: View {
         account: Account?,
         allCards: [BankCard] = [],
         allowsFlip: Bool = true,
-        usesLandscapeWalletFrame: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
 
@@ -1113,9 +1156,6 @@ struct FlippableBankCardView: View {
 
         self.allowsFlip =
             allowsFlip
-
-        self.usesLandscapeWalletFrame =
-            usesLandscapeWalletFrame
 
         self.onTap =
             onTap
@@ -1191,41 +1231,20 @@ struct FlippableBankCardView: View {
     }
 
 
-    @ViewBuilder
     private var cardSurface:
         some View {
 
-        if usesLandscapeWalletFrame {
-
-            cardFaces
-                .frame(
-                    maxWidth: .infinity,
-                    maxHeight: .infinity
-                )
-                .clipShape(
-                    RoundedRectangle(
-                        cornerRadius:
-                            BankCardLayout
-                                .cornerRadius,
-                        style:
-                            .continuous
-                    )
-                )
-                .clipped()
-
-        } else {
-
-            cardFaces
-                .aspectRatio(
-                    BankCardLayout
-                        .aspectRatio(
-                            for:
-                                customFaceImage
-                        ),
-                    contentMode:
-                        .fit
-                )
-        }
+        cardFaces
+            // 卡包与详情页共用同一横向实体卡画布。
+            .aspectRatio(
+                BankCardLayout
+                    .aspectRatio,
+                contentMode:
+                    .fit
+            )
+            .frame(
+                maxWidth: .infinity
+            )
     }
 
 
@@ -1289,11 +1308,13 @@ struct FlippableBankCardView: View {
     private var cardFront:
         some View {
 
-        if usesLandscapeWalletFrame,
-           let customFaceImage {
+        if let customFaceImage {
 
-            walletUploadedFace(
-                customFaceImage
+            UploadedCardFaceView(
+                image:
+                    customFaceImage,
+                theme:
+                    card.theme
             )
 
         } else {
@@ -1533,119 +1554,13 @@ struct FlippableBankCardView: View {
     }
 
 
-    private func walletUploadedFace(
-        _ image:
-            UIImage
-    ) -> some View {
-
-        GeometryReader {
-            geometry in
-
-            ZStack {
-
-                let isPortrait =
-                    image.size.height >
-                    image.size.width
-
-                CardThemeBackground(
-                    theme:
-                        card.theme
-                )
-
-                Image(
-                    uiImage:
-                        image
-                )
-                .resizable()
-                .scaledToFit()
-                // 先按横向卡体交换宽高，再旋转 90°，
-                // 这样原图完整保留，只改变展示方向。
-                .frame(
-                    width:
-                        isPortrait
-                        ? geometry.size.height
-                        : geometry.size.width,
-                    height:
-                        isPortrait
-                        ? geometry.size.width
-                        : geometry.size.height
-                )
-                .rotationEffect(
-                    .degrees(
-                        isPortrait
-                        ? 90
-                        : 0
-                    )
-                )
-                .position(
-                    x:
-                        geometry.size.width / 2,
-                    y:
-                        geometry.size.height / 2
-                )
-            }
-            .clipped()
-        }
-    }
-
-
-    @ViewBuilder
     private var cardFrontBackground:
         some View {
 
-        if let customFaceImage {
-
-            ZStack {
-
-                CardThemeBackground(
-                    theme:
-                        card.theme
-                )
-
-                Image(
-                    uiImage:
-                        customFaceImage
-                )
-                .resizable()
-                // 卡面图片保持原始方向和比例；卡包横向画布只负责卡体外框。
-                .scaledToFit()
-                .frame(
-                    maxWidth:
-                        .infinity,
-                    maxHeight:
-                        .infinity
-                )
-                .clipped()
-            }
-            .overlay {
-
-                LinearGradient(
-                    colors:
-                        [
-                            .black.opacity(
-                                0.28
-                            ),
-                            .black.opacity(
-                                0.08
-                            ),
-                            .black.opacity(
-                                0.30
-                            )
-                        ],
-                    startPoint:
-                        .topLeading,
-                    endPoint:
-                        .bottomTrailing
-                )
-            }
-
-        } else {
-
-            CardThemeBackground(
-                theme:
-                    card.theme
-            )
-        }
+        CardThemeBackground(
+            theme:
+                card.theme
+        )
     }
 
 
@@ -1679,55 +1594,12 @@ struct FlippableBankCardView: View {
 
         if let customBackFaceImage {
 
-            if usesLandscapeWalletFrame {
-
-                walletUploadedFace(
-                    customBackFaceImage
-                )
-
-            } else {
-
-            ZStack {
-
-                CardThemeBackground(
-                    theme:
-                        card.theme
-                )
-
-                Image(
-                    uiImage:
-                        customBackFaceImage
-                )
-                .resizable()
-                .scaledToFit()
-                .frame(
-                    maxWidth:
-                        .infinity,
-                    maxHeight:
-                        .infinity
-                )
-                .clipped()
-            }
-            .clipShape(
-                RoundedRectangle(
-                    cornerRadius:
-                        BankCardLayout
-                            .cornerRadius,
-                    style:
-                        .continuous
-                )
+            UploadedCardFaceView(
+                image:
+                    customBackFaceImage,
+                theme:
+                    card.theme
             )
-            .shadow(
-                color:
-                    .black.opacity(
-                        0.15
-                    ),
-                radius:
-                    14,
-                y:
-                    8
-            )
-            }
 
         } else {
 
