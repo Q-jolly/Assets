@@ -22,12 +22,8 @@ struct GetCategoriesIntent: AppIntent {
             return .result(value: all)
         }
 
-        let allowed = Set(
-            QuickAddTransactionSupport
-                .categoryNames(for: type.transactionType)
-                .map(CategoryNormalizer.normalized)
-        )
-
-        return .result(value: all.filter { allowed.contains($0.name) })
+        // Filter by the persisted category identity/type, not by a duplicated
+        // Shortcut-side name array.
+        return .result(value: all.filter { $0.transactionType == type })
     }
 }

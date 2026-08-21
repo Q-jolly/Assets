@@ -142,10 +142,21 @@ enum QuickAddCurrency: String, AppEnum, CaseIterable, Sendable {
 }
 
 
+struct QuickAddCategoryRecord: Hashable, Sendable {
+
+    let id: String
+    let name: String
+    let icon: String
+    let transactionType: QuickAddTransactionType
+}
+
+
 struct QuickAddCategoryEntity: AppEntity, Hashable, Sendable {
 
     let id: String
     let name: String
+    let icon: String
+    let transactionType: QuickAddTransactionType
 
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation {
@@ -157,22 +168,8 @@ struct QuickAddCategoryEntity: AppEntity, Hashable, Sendable {
 
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: "\(emoji) \(name)")
-    }
-
-
-    private var emoji: String {
-        switch name {
-        case "餐饮": return "🍚"
-        case "交通": return "🚗"
-        case "居住": return "🏠"
-        case "购物": return "🛒"
-        case "娱乐": return "🎮"
-        case "医疗": return "💊"
-        case "学习": return "📚"
-        case "其他": return "◼︎"
-        default: return "🏷️"
-        }
+        // 名称和图标均来自 App 当前分类记录，不在快捷指令中维护副本。
+        DisplayRepresentation(title: "\(name)")
     }
 }
 
@@ -199,8 +196,13 @@ struct QuickAddCategoryQuery: EntityQuery, EntityStringQuery, Sendable {
 
 
     private func allEntities() -> [QuickAddCategoryEntity] {
-        QuickAddTransactionSupport.allCategoryNames().map {
-            QuickAddCategoryEntity(id: $0, name: $0)
+        QuickAddTransactionSupport.categoryRecords().map {
+            QuickAddCategoryEntity(
+                id: $0.id,
+                name: $0.name,
+                icon: $0.icon,
+                transactionType: $0.transactionType
+            )
         }
     }
 }
@@ -343,43 +345,107 @@ enum QuickAddTransactionSupport {
 
 
     static func categoryNames(for type: TransactionType) -> [String] {
-
-        let expense = CategoryStore.expenseCategories(
-            from: UserDefaults.standard.string(forKey: CategoryStore.expenseKey) ?? ""
-        )
-        .map(\.name)
-
-        let income = CategoryStore.incomeCategories(
-            from: UserDefaults.standard.string(forKey: CategoryStore.incomeKey) ?? ""
-        )
-        .map(\.name)
-
-        switch type {
-
-        case .income:
-            return income
-
-        case .expense, .creditExpense:
-            return expense
-
-        case .creditRepayment:
-            return ["信用卡还款"]
-
-        case .transfer:
-            return ["转账"]
-
-        case .adjustment:
-            return []
-        }
+        categoryRecords(for: quickAddType(for: type)).map(\.name)
     }
 
 
     static func allCategoryNames() -> [String] {
 
         var seen = Set<String>()
-        return (categoryNames(for: .expense) + categoryNames(for: .income) + categoryNames(for: .transfer))
-            .map(CategoryNormalizer.normalized)
+        return categoryRecords()
+            .map { CategoryNormalizer.normalized($0.name) }
             .filter { seen.insert($0).inserted }
+    }
+
+
+    /// Returns the same category records that the App's category manager uses.
+    /// IDs are preserved so a Shortcut passes the selected category identity
+    /// instead of maintaining a second hard-coded name list.
+    static func categoryRecords(
+        for type: QuickAddTransactionType? = nil
+    ) -> [QuickAddCategoryRecord] {
+
+        let requestedTypes: [QuickAddTransactionType] =
+            type.map { [$0] } ?? [.expense, .income]
+
+        let defaults = UserDefaults.standard
+        let expense = CategoryStore.expenseCategories(
+            from: defaults.string(forKey: CategoryStore.expenseKey) ?? ""
+        )
+        let income = CategoryStore.incomeCategories(
+            from: defaults.string(forKey: CategoryStore.incomeKey) ?? ""
+        )
+
+        var records: [QuickAddCategoryRecord] = []
+        var seen = Set<String>()
+
+        for requestedType in requestedTypes {
+            let items: [CategoryItem]
+            switch requestedType {
+            case .expense:
+                items = expense
+            case .income:
+                items = income
+            case .transfer:
+                items = [CategoryItem(id: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!, name: "转账", icon: "arrow.left.arrow.right")]
+            }
+
+            for item in items {
+                let normalizedName = CategoryNormalizer.normalized(item.name)
+                guard !normalizedName.isEmpty else { continue }
+                let id = item.id.uuidString
+                guard seen.insert("\(requestedType.rawValue):\(id)").inserted else { continue }
+                records.append(
+                    QuickAddCategoryRecord(
+                        id: id,
+                        name: normalizedName,
+                        icon: item.icon,
+                        transactionType: requestedType
+                    )
+                )
+            }
+        }
+
+        return records
+    }
+
+
+    static func categoryRecord(
+        for entity: QuickAddCategoryEntity,
+        type: TransactionType
+    ) -> QuickAddCategoryRecord? {
+
+        let requestedType = quickAddType(for: type)
+        let records = categoryRecords(for: requestedType)
+
+        // Preferred path: the AppEntity ID is the CategoryItem UUID.
+        if let match = records.first(where: { $0.id == entity.id }) {
+            return match
+        }
+
+        // Compatibility path for entities created by the previous build,
+        // whose ID was the category name rather than the stored UUID.
+        let normalizedName = CategoryNormalizer.normalized(entity.name)
+        return records.first {
+            CategoryNormalizer.normalized($0.name) == normalizedName
+        }
+    }
+
+
+    private static func quickAddType(
+        for type: TransactionType
+    ) -> QuickAddTransactionType? {
+
+        switch type {
+        case .income:
+            return .income
+        case .expense, .creditExpense, .creditRepayment:
+            return .expense
+        case .transfer:
+            return .transfer
+        case .adjustment:
+            return nil
+        }
     }
 
 
@@ -535,16 +601,18 @@ enum QuickAddTransactionSupport {
             throw QuickAddTransactionError.transferRequiresTargetAccount
         }
 
-        let categoryValue = CategoryNormalizer.normalized(category.name)
-        guard !categoryValue.isEmpty else {
-            throw QuickAddTransactionError.missingCategory
-        }
-
-        let availableCategories = categoryNames(for: transactionType)
-            .map(CategoryNormalizer.normalized)
-        if !availableCategories.contains(categoryValue) {
+        guard let categoryRecord = categoryRecord(
+            for: category,
+            type: transactionType
+        ) else {
+            let categoryValue = CategoryNormalizer.normalized(category.name)
+            if categoryValue.isEmpty {
+                throw QuickAddTransactionError.missingCategory
+            }
             throw QuickAddTransactionError.categoryNotFound(categoryValue)
         }
+
+        let categoryValue = CategoryNormalizer.normalized(categoryRecord.name)
 
         var rates = ExchangeRateService.cachedSnapshot()
         let needsCurrencyRate = code != "CNY" && rates.rateToCNY(for: code) == nil
