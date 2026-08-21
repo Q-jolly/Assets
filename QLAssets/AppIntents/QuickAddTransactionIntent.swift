@@ -75,7 +75,10 @@ enum QuickAddTransactionSupport {
     }
 
 
-    static func normalizedType(_ value: String?) throws -> TransactionType {
+    static func normalizedType(
+        _ value: String?,
+        amount: Double
+    ) throws -> TransactionType {
 
         let trimmed = value?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -96,7 +99,13 @@ enum QuickAddTransactionSupport {
 
         case "":
             // 快捷指令没有传类型时，沿用 OCR 正负号约定：负数为支出，正数为收入。
-            return .income
+            if amount < 0 {
+                return .expense
+            }
+            if amount > 0 {
+                return .income
+            }
+            throw QuickAddTransactionError.invalidType(trimmed)
 
         default:
             throw QuickAddTransactionError.invalidType(trimmed)
@@ -232,7 +241,7 @@ enum QuickAddTransactionSupport {
             throw QuickAddTransactionError.invalidAmount
         }
 
-        let requestedType = try normalizedType(typeRaw)
+        let requestedType = try normalizedType(typeRaw, amount: amount)
         let code = normalizedCurrencyCode(currency)
 
         guard CurrencyCatalog.supported.contains(where: { $0.code == code }) else {
@@ -381,7 +390,7 @@ struct QuickAddTransactionIntent: AppIntent {
     var currency: String
 
     @Parameter(title: "类型")
-    var type: String
+    var type: String?
 
     @Parameter(title: "分类")
     var category: String
