@@ -370,6 +370,17 @@ struct CardWalletView: View {
                         height:
                             cardHeight
                     )
+                    // 卡体固定横向比例；竖向卡面内容不得溢出卡体边界。
+                    .clipShape(
+                        RoundedRectangle(
+                            cornerRadius:
+                                BankCardLayout
+                                    .cornerRadius,
+                            style:
+                                .continuous
+                        )
+                    )
+                    .clipped()
                     .scaleEffect(
                         1 -
                         CGFloat(
