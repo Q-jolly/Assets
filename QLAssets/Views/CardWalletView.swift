@@ -1145,13 +1145,22 @@ struct FlippableBankCardView: View {
                     : 0
                 )
         }
-        .aspectRatio(
-            // 卡体始终横向；竖向卡面图片保持原方向并在卡框内显示。
-            BankCardLayout
-                .aspectRatio,
-            contentMode:
-                .fit
+        // 卡包外层会传入固定的横向银行卡画布尺寸。这里不要再根据
+        // 图片的原始比例重新参与布局，否则竖向卡面会把卡体撑成竖卡。
+        .frame(
+            maxWidth: .infinity,
+            maxHeight: .infinity
         )
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius:
+                    BankCardLayout
+                        .cornerRadius,
+                style:
+                    .continuous
+            )
+        )
+        .clipped()
         .compositingGroup()
         .contentShape(
             RoundedRectangle(
@@ -3770,6 +3779,14 @@ struct CardDetailView: View {
                         linkedAccount,
                     allCards:
                         cards
+                )
+                .aspectRatio(
+                    BankCardLayout
+                        .aspectRatio,
+                    contentMode: .fit
+                )
+                .frame(
+                    maxWidth: .infinity
                 )
                 .listRowInsets(
                     EdgeInsets()
