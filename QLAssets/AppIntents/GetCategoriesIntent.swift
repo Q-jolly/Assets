@@ -4,7 +4,7 @@ import Foundation
 
 struct GetCategoriesIntent: AppIntent {
 
-    static let title: LocalizedStringResource = "获取分类列表"
+    static let title: LocalizedStringResource = "QL Assets 获取分类"
 
     static let description = IntentDescription(
         "读取 QL Assets 当前维护的收入和支出分类，供快捷指令动态选择。"
@@ -13,25 +13,21 @@ struct GetCategoriesIntent: AppIntent {
     static let openAppWhenRun = false
 
     @Parameter(title: "类型")
-    var type: String?
+    var type: QuickAddTransactionType?
 
-    func perform() async throws -> some IntentResult & ReturnsValue<[String]> {
+    func perform() async throws -> some IntentResult & ReturnsValue<[QuickAddCategoryEntity]> {
 
-        let normalized = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
-        let values: [String]
-
-        switch normalized {
-
-        case "income", "收入", "in":
-            values = QuickAddTransactionSupport.categoryNames(for: .income)
-
-        case "expense", "支出", "out", "debit":
-            values = QuickAddTransactionSupport.categoryNames(for: .expense)
-
-        default:
-            values = QuickAddTransactionSupport.allCategoryNames()
+        let all = try await QuickAddCategoryQuery().suggestedEntities()
+        guard let type else {
+            return .result(value: all)
         }
 
-        return .result(value: values)
+        let allowed = Set(
+            QuickAddTransactionSupport
+                .categoryNames(for: type.transactionType)
+                .map(CategoryNormalizer.normalized)
+        )
+
+        return .result(value: all.filter { allowed.contains($0.name) })
     }
 }

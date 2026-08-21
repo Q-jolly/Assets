@@ -12,6 +12,7 @@ enum QuickAddTransactionError: LocalizedError {
     case accountNotFound(String)
     case unsupportedCurrency(String)
     case exchangeRateUnavailable(String)
+    case transferRequiresTargetAccount
     case saveFailed
 
 
@@ -40,6 +41,9 @@ enum QuickAddTransactionError: LocalizedError {
         case .exchangeRateUnavailable(let currency):
             return "暂时无法取得 \(currency) 到人民币的汇率，请联网后重试。"
 
+        case .transferRequiresTargetAccount:
+            return "转账需要转出账户和转入账户；当前快捷记账流程只接收一个账户。"
+
         case .saveFailed:
             return "账单保存失败，账户余额未完成同步。"
         }
@@ -47,7 +51,250 @@ enum QuickAddTransactionError: LocalizedError {
 }
 
 
+enum QuickAddTransactionType: String, AppEnum, CaseIterable, Sendable {
+
+    case expense
+    case income
+    case transfer
+
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "收支类型")
+    }
+
+
+    static var caseDisplayRepresentations: [Self: DisplayRepresentation] {
+        [
+            .expense: DisplayRepresentation(title: "🔴 支出"),
+            .income: DisplayRepresentation(title: "🟢 收入"),
+            .transfer: DisplayRepresentation(title: "🔵 转账")
+        ]
+    }
+
+
+    var transactionType: TransactionType {
+        switch self {
+        case .expense:
+            return .expense
+        case .income:
+            return .income
+        case .transfer:
+            return .transfer
+        }
+    }
+}
+
+
+enum QuickAddCurrency: String, AppEnum, CaseIterable, Sendable {
+
+    case cny = "CNY"
+    case usd = "USD"
+    case eur = "EUR"
+    case gbp = "GBP"
+    case jpy = "JPY"
+    case hkd = "HKD"
+    case aud = "AUD"
+    case cad = "CAD"
+    case sgd = "SGD"
+    case chf = "CHF"
+    case nzd = "NZD"
+    case krw = "KRW"
+    case thb = "THB"
+    case aed = "AED"
+    case mop = "MOP"
+    case dkk = "DKK"
+    case sek = "SEK"
+    case nok = "NOK"
+
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "货币")
+    }
+
+
+    static var caseDisplayRepresentations: [Self: DisplayRepresentation] {
+        [
+            .cny: DisplayRepresentation(title: "人民币 · CNY"),
+            .usd: DisplayRepresentation(title: "美元 · USD"),
+            .eur: DisplayRepresentation(title: "欧元 · EUR"),
+            .gbp: DisplayRepresentation(title: "英镑 · GBP"),
+            .jpy: DisplayRepresentation(title: "日元 · JPY"),
+            .hkd: DisplayRepresentation(title: "港币 · HKD"),
+            .aud: DisplayRepresentation(title: "澳元 · AUD"),
+            .cad: DisplayRepresentation(title: "加元 · CAD"),
+            .sgd: DisplayRepresentation(title: "新加坡元 · SGD"),
+            .chf: DisplayRepresentation(title: "瑞士法郎 · CHF"),
+            .nzd: DisplayRepresentation(title: "新西兰元 · NZD"),
+            .krw: DisplayRepresentation(title: "韩元 · KRW"),
+            .thb: DisplayRepresentation(title: "泰铢 · THB"),
+            .aed: DisplayRepresentation(title: "阿联酋迪拉姆 · AED"),
+            .mop: DisplayRepresentation(title: "澳门元 · MOP"),
+            .dkk: DisplayRepresentation(title: "丹麦克朗 · DKK"),
+            .sek: DisplayRepresentation(title: "瑞典克朗 · SEK"),
+            .nok: DisplayRepresentation(title: "挪威克朗 · NOK")
+        ]
+    }
+
+
+    var code: String {
+        rawValue
+    }
+}
+
+
+struct QuickAddCategoryEntity: AppEntity, Hashable, Sendable {
+
+    let id: String
+    let name: String
+
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "分类")
+    }
+
+
+    static var defaultQuery = QuickAddCategoryQuery()
+
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: "\(emoji) \(name)")
+    }
+
+
+    private var emoji: String {
+        switch name {
+        case "餐饮": return "🍚"
+        case "交通": return "🚗"
+        case "居住": return "🏠"
+        case "购物": return "🛒"
+        case "娱乐": return "🎮"
+        case "医疗": return "💊"
+        case "学习": return "📚"
+        case "其他": return "◼︎"
+        default: return "🏷️"
+        }
+    }
+}
+
+
+struct QuickAddCategoryQuery: EntityQuery, EntityStringQuery, Sendable {
+
+    func entities(for identifiers: [QuickAddCategoryEntity.ID]) async throws -> [QuickAddCategoryEntity] {
+        allEntities().filter { identifiers.contains($0.id) }
+    }
+
+
+    func suggestedEntities() async throws -> [QuickAddCategoryEntity] {
+        allEntities()
+    }
+
+
+    func entities(matching string: String) async throws -> [QuickAddCategoryEntity] {
+        let query = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return allEntities() }
+        return allEntities().filter {
+            $0.name.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+
+    private func allEntities() -> [QuickAddCategoryEntity] {
+        QuickAddTransactionSupport.allCategoryNames().map {
+            QuickAddCategoryEntity(id: $0, name: $0)
+        }
+    }
+}
+
+
+struct QuickAddAccountEntity: AppEntity, Hashable, Sendable {
+
+    let id: String
+    let name: String
+    let currencyCode: String
+    let isCreditCard: Bool
+
+
+    static var typeDisplayRepresentation: TypeDisplayRepresentation {
+        TypeDisplayRepresentation(name: "账户")
+    }
+
+
+    static var defaultQuery = QuickAddAccountQuery()
+
+
+    var displayRepresentation: DisplayRepresentation {
+        DisplayRepresentation(title: name)
+    }
+}
+
+
+struct QuickAddAccountQuery: EntityQuery, EntityStringQuery, Sendable {
+
+    func entities(for identifiers: [QuickAddAccountEntity.ID]) async throws -> [QuickAddAccountEntity] {
+        try await suggestedEntities().filter { identifiers.contains($0.id) }
+    }
+
+
+    func suggestedEntities() async throws -> [QuickAddAccountEntity] {
+        try await MainActor.run {
+            let container = try QuickAddTransactionSupport.makeContainer()
+            let context = ModelContext(container)
+            let result = try QuickAddTransactionSupport.fetchAccountsAndCards(context: context)
+            var entities: [QuickAddAccountEntity] = []
+            var seen = Set<String>()
+
+            for account in result.accounts {
+                let name = account.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !name.isEmpty, seen.insert(name).inserted else { continue }
+                entities.append(
+                    QuickAddAccountEntity(
+                        id: account.id.uuidString,
+                        name: name,
+                        currencyCode: account.currencyCode,
+                        isCreditCard: false
+                    )
+                )
+            }
+
+            for card in result.cards where card.cardType == .credit {
+                let name = QuickAddTransactionSupport.cardLabels(for: card).first ?? card.bankName
+                guard !name.isEmpty, seen.insert(name).inserted else { continue }
+                let currency = result.accounts.first {
+                    $0.id == card.accountID
+                }?.currencyCode ?? "CNY"
+                entities.append(
+                    QuickAddAccountEntity(
+                        id: "card:\(card.id.uuidString)",
+                        name: name,
+                        currencyCode: currency,
+                        isCreditCard: true
+                    )
+                )
+            }
+
+            return entities
+        }
+    }
+
+
+    func entities(matching string: String) async throws -> [QuickAddAccountEntity] {
+        let query = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return try await suggestedEntities() }
+        return try await suggestedEntities().filter {
+            $0.name.localizedCaseInsensitiveContains(query) ||
+            $0.currencyCode.localizedCaseInsensitiveContains(query)
+        }
+    }
+}
+
+
 enum QuickAddTransactionSupport {
+
+    static func normalizedCurrencyCode(_ value: QuickAddCurrency) -> String {
+
+        value.code
+    }
+
 
     static func normalizedCurrencyCode(_ value: String) -> String {
 
@@ -76,40 +323,22 @@ enum QuickAddTransactionSupport {
 
 
     static func normalizedType(
-        _ value: String?,
+        _ value: QuickAddTransactionType?,
         amount: Double
     ) throws -> TransactionType {
 
-        let trimmed = value?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-
-        switch trimmed.lowercased() {
-
-        case "expense", "支出", "out", "debit":
-            return .expense
-
-        case "income", "收入", "in", "credit":
-            return .income
-
-        case "creditexpense", "credit_expense", "信用卡消费":
-            return .creditExpense
-
-        case "creditrepayment", "credit_repayment", "信用卡还款":
-            return .creditRepayment
-
-        case "":
-            // 快捷指令没有传类型时，沿用 OCR 正负号约定：负数为支出，正数为收入。
-            if amount < 0 {
-                return .expense
-            }
-            if amount > 0 {
-                return .income
-            }
-            throw QuickAddTransactionError.invalidType(trimmed)
-
-        default:
-            throw QuickAddTransactionError.invalidType(trimmed)
+        if let value {
+            return value.transactionType
         }
+
+        // 快捷指令没有传类型时，沿用 OCR 正负号约定：负数为支出，正数为收入。
+        if amount < 0 {
+            return .expense
+        }
+        if amount > 0 {
+            return .income
+        }
+        throw QuickAddTransactionError.invalidType("")
     }
 
 
@@ -148,7 +377,7 @@ enum QuickAddTransactionSupport {
     static func allCategoryNames() -> [String] {
 
         var seen = Set<String>()
-        return (categoryNames(for: .expense) + categoryNames(for: .income))
+        return (categoryNames(for: .expense) + categoryNames(for: .income) + categoryNames(for: .transfer))
             .map(CategoryNormalizer.normalized)
             .filter { seen.insert($0).inserted }
     }
@@ -229,10 +458,10 @@ enum QuickAddTransactionSupport {
     @MainActor
     static func save(
         amount: Double,
-        currency: String,
-        typeRaw: String?,
-        category: String,
-        accountName: String,
+        currency: QuickAddCurrency,
+        type: QuickAddTransactionType?,
+        category: QuickAddCategoryEntity,
+        account: QuickAddAccountEntity,
         note: String?,
         date: Date?
     ) async throws -> String {
@@ -241,32 +470,39 @@ enum QuickAddTransactionSupport {
             throw QuickAddTransactionError.invalidAmount
         }
 
-        let requestedType = try normalizedType(typeRaw, amount: amount)
+        let requestedType = try normalizedType(type, amount: amount)
         let code = normalizedCurrencyCode(currency)
-
-        guard CurrencyCatalog.supported.contains(where: { $0.code == code }) else {
-            throw QuickAddTransactionError.unsupportedCurrency(code)
-        }
 
         let container = try makeContainer()
         let context = ModelContext(container)
         let (accounts, cards) = try fetchAccountsAndCards(context: context)
 
-        let requestedName = accountName
+        let requestedName = account.name
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !requestedName.isEmpty else {
-            throw QuickAddTransactionError.accountNotFound(accountName)
+            throw QuickAddTransactionError.accountNotFound(account.name)
         }
 
         let normalizedRequestedName = requestedName.lowercased()
-        let selectedAccount = accounts.first {
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedRequestedName
-        }
+        let selectedAccount: Account?
+        let selectedCard: BankCard?
 
-        let selectedCard = cards.first { card in
-            guard card.cardType == .credit else { return false }
-            return cardLabels(for: card).contains {
-                $0.lowercased() == normalizedRequestedName
+        if let accountID = UUID(uuidString: account.id) {
+            selectedAccount = accounts.first { $0.id == accountID }
+            selectedCard = nil
+        } else if account.id.hasPrefix("card:"),
+                  let cardID = UUID(uuidString: String(account.id.dropFirst("card:".count))) {
+            selectedAccount = nil
+            selectedCard = cards.first { $0.id == cardID && $0.cardType == .credit }
+        } else {
+            selectedAccount = accounts.first {
+                $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedRequestedName
+            }
+            selectedCard = cards.first { card in
+                guard card.cardType == .credit else { return false }
+                return cardLabels(for: card).contains {
+                    $0.lowercased() == normalizedRequestedName
+                }
             }
         }
 
@@ -295,7 +531,11 @@ enum QuickAddTransactionSupport {
             }
         }
 
-        let categoryValue = CategoryNormalizer.normalized(category)
+        if transactionType == .transfer {
+            throw QuickAddTransactionError.transferRequiresTargetAccount
+        }
+
+        let categoryValue = CategoryNormalizer.normalized(category.name)
         guard !categoryValue.isEmpty else {
             throw QuickAddTransactionError.missingCategory
         }
@@ -375,7 +615,7 @@ enum QuickAddTransactionSupport {
 
 struct QuickAddTransactionIntent: AppIntent {
 
-    static let title: LocalizedStringResource = "快速记账"
+    static let title: LocalizedStringResource = "QL Assets 快速记账"
 
     static let description = IntentDescription(
         "把快捷指令识别出的金额、分类、账户和备注保存到 QL Assets。"
@@ -387,16 +627,16 @@ struct QuickAddTransactionIntent: AppIntent {
     var amount: Double
 
     @Parameter(title: "货币")
-    var currency: String
+    var currency: QuickAddCurrency
 
     @Parameter(title: "类型")
-    var type: String?
+    var type: QuickAddTransactionType?
 
     @Parameter(title: "分类")
-    var category: String
+    var category: QuickAddCategoryEntity
 
     @Parameter(title: "账户")
-    var account: String
+    var account: QuickAddAccountEntity
 
     @Parameter(title: "备注")
     var note: String?
@@ -409,9 +649,9 @@ struct QuickAddTransactionIntent: AppIntent {
         let message = try await QuickAddTransactionSupport.save(
             amount: amount,
             currency: currency,
-            typeRaw: type,
+            type: type,
             category: category,
-            accountName: account,
+            account: account,
             note: note,
             date: date
         )
