@@ -352,6 +352,8 @@ struct CardWalletView: View {
                             cards,
                         allowsFlip:
                             relativeIndex == 0,
+                        usesLandscapeWalletFrame:
+                            true,
                         onTap: {
 
                             if relativeIndex >
@@ -1055,6 +1057,9 @@ struct FlippableBankCardView: View {
     let allowsFlip:
         Bool
 
+    let usesLandscapeWalletFrame:
+        Bool
+
     let onTap:
         (() -> Void)?
 
@@ -1076,6 +1081,7 @@ struct FlippableBankCardView: View {
         account: Account?,
         allCards: [BankCard] = [],
         allowsFlip: Bool = true,
+        usesLandscapeWalletFrame: Bool = false,
         onTap: (() -> Void)? = nil
     ) {
 
@@ -1091,6 +1097,9 @@ struct FlippableBankCardView: View {
         self.allowsFlip =
             allowsFlip
 
+        self.usesLandscapeWalletFrame =
+            usesLandscapeWalletFrame
+
         self.onTap =
             onTap
     }
@@ -1098,70 +1107,7 @@ struct FlippableBankCardView: View {
 
     var body: some View {
 
-        ZStack {
-
-            cardFront
-                .rotation3DEffect(
-                    .degrees(
-                        flipped
-                        ? 180
-                        : 0
-                    ),
-                    axis:
-                        (
-                            x: 0,
-                            y: 1,
-                            z: 0
-                        ),
-                    perspective:
-                        0.65
-                )
-                .opacity(
-                    flipped
-                    ? 0
-                    : 1
-                )
-
-
-            cardBack
-                .rotation3DEffect(
-                    .degrees(
-                        flipped
-                        ? 0
-                        : -180
-                    ),
-                    axis:
-                        (
-                            x: 0,
-                            y: 1,
-                            z: 0
-                        ),
-                    perspective:
-                        0.65
-                )
-                .opacity(
-                    flipped
-                    ? 1
-                    : 0
-                )
-        }
-        // 卡包外层会传入固定的横向银行卡画布尺寸。这里不要再根据
-        // 图片的原始比例重新参与布局，否则竖向卡面会把卡体撑成竖卡。
-        .frame(
-            maxWidth: .infinity,
-            maxHeight: .infinity
-        )
-        .clipShape(
-            RoundedRectangle(
-                cornerRadius:
-                    BankCardLayout
-                        .cornerRadius,
-                style:
-                    .continuous
-            )
-        )
-        .clipped()
-        .compositingGroup()
+        cardSurface
         .contentShape(
             RoundedRectangle(
                 cornerRadius:
@@ -1225,6 +1171,98 @@ struct FlippableBankCardView: View {
 
             reloadCustomFace()
         }
+    }
+
+
+    @ViewBuilder
+    private var cardSurface:
+        some View {
+
+        if usesLandscapeWalletFrame {
+
+            cardFaces
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity
+                )
+                .clipShape(
+                    RoundedRectangle(
+                        cornerRadius:
+                            BankCardLayout
+                                .cornerRadius,
+                        style:
+                            .continuous
+                    )
+                )
+                .clipped()
+
+        } else {
+
+            cardFaces
+                .aspectRatio(
+                    BankCardLayout
+                        .aspectRatio(
+                            for:
+                                customFaceImage
+                        ),
+                    contentMode:
+                        .fit
+                )
+        }
+    }
+
+
+    private var cardFaces:
+        some View {
+
+        ZStack {
+
+            cardFront
+                .rotation3DEffect(
+                    .degrees(
+                        flipped
+                        ? 180
+                        : 0
+                    ),
+                    axis:
+                        (
+                            x: 0,
+                            y: 1,
+                            z: 0
+                        ),
+                    perspective:
+                        0.65
+                )
+                .opacity(
+                    flipped
+                    ? 0
+                    : 1
+                )
+
+
+            cardBack
+                .rotation3DEffect(
+                    .degrees(
+                        flipped
+                        ? 0
+                        : -180
+                    ),
+                    axis:
+                        (
+                            x: 0,
+                            y: 1,
+                            z: 0
+                        ),
+                    perspective:
+                        0.65
+                )
+                .opacity(
+                    flipped
+                    ? 1
+                    : 0
+                )
+        }
+        .compositingGroup()
     }
 
 
@@ -1473,19 +1511,28 @@ struct FlippableBankCardView: View {
 
         if let customFaceImage {
 
-            Image(
-                uiImage:
-                    customFaceImage
-            )
-            .resizable()
-            .scaledToFill()
-            .frame(
-                maxWidth:
-                    .infinity,
-                maxHeight:
-                    .infinity
-            )
-            .clipped()
+            ZStack {
+
+                CardThemeBackground(
+                    theme:
+                        card.theme
+                )
+
+                Image(
+                    uiImage:
+                        customFaceImage
+                )
+                .resizable()
+                // 卡面图片保持原始方向和比例；卡包横向画布只负责卡体外框。
+                .scaledToFit()
+                .frame(
+                    maxWidth:
+                        .infinity,
+                    maxHeight:
+                        .infinity
+                )
+                .clipped()
+            }
             .overlay {
 
                 LinearGradient(
@@ -1548,19 +1595,27 @@ struct FlippableBankCardView: View {
 
         if let customBackFaceImage {
 
-            Image(
-                uiImage:
-                    customBackFaceImage
-            )
-            .resizable()
-            .scaledToFill()
-            .frame(
-                maxWidth:
-                    .infinity,
-                maxHeight:
-                    .infinity
-            )
-            .clipped()
+            ZStack {
+
+                CardThemeBackground(
+                    theme:
+                        card.theme
+                )
+
+                Image(
+                    uiImage:
+                        customBackFaceImage
+                )
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    maxWidth:
+                        .infinity,
+                    maxHeight:
+                        .infinity
+                )
+                .clipped()
+            }
             .clipShape(
                 RoundedRectangle(
                     cornerRadius:
@@ -3672,19 +3727,27 @@ struct BankCardPreview: View {
 
         if let customFaceImage {
 
-            Image(
-                uiImage:
-                    customFaceImage
-            )
-            .resizable()
-            .scaledToFill()
-            .frame(
-                maxWidth:
-                    .infinity,
-                maxHeight:
-                    .infinity
-            )
-            .clipped()
+            ZStack {
+
+                CardThemeBackground(
+                    theme:
+                        theme
+                )
+
+                Image(
+                    uiImage:
+                        customFaceImage
+                )
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    maxWidth:
+                        .infinity,
+                    maxHeight:
+                        .infinity
+                )
+                .clipped()
+            }
             .overlay {
 
                 LinearGradient(
@@ -3779,14 +3842,6 @@ struct CardDetailView: View {
                         linkedAccount,
                     allCards:
                         cards
-                )
-                .aspectRatio(
-                    BankCardLayout
-                        .aspectRatio,
-                    contentMode: .fit
-                )
-                .frame(
-                    maxWidth: .infinity
                 )
                 .listRowInsets(
                     EdgeInsets()
