@@ -5,6 +5,7 @@ import SwiftData
 
 enum QuickAddTransactionError: LocalizedError {
 
+    case amountMissing
     case invalidAmount
     case invalidType(String)
     case missingCategory
@@ -19,6 +20,9 @@ enum QuickAddTransactionError: LocalizedError {
     var errorDescription: String? {
 
         switch self {
+
+        case .amountMissing:
+            return "请先在快捷指令中完成截图 OCR，再把金额传入 QL Assets。"
 
         case .invalidAmount:
             return "金额必须大于 0。"
@@ -212,6 +216,7 @@ struct QuickAddAccountEntity: AppEntity, Hashable, Sendable {
 
     let id: String
     let name: String
+    let type: String
     let currencyCode: String
     let isCreditCard: Bool
 
@@ -233,7 +238,14 @@ struct QuickAddAccountEntity: AppEntity, Hashable, Sendable {
 struct QuickAddAccountQuery: EntityQuery, EntityStringQuery, Sendable {
 
     func entities(for identifiers: [QuickAddAccountEntity.ID]) async throws -> [QuickAddAccountEntity] {
-        try await suggestedEntities().filter { identifiers.contains($0.id) }
+        let values = try await suggestedEntities()
+        return identifiers.compactMap { identifier in
+            values.first {
+                $0.id == identifier ||
+                QuickAddTransactionSupport.normalizedAccountName($0.name) ==
+                    QuickAddTransactionSupport.normalizedAccountName(identifier)
+            }
+        }
     }
 
 
@@ -243,15 +255,17 @@ struct QuickAddAccountQuery: EntityQuery, EntityStringQuery, Sendable {
             let context = ModelContext(container)
             let result = try QuickAddTransactionSupport.fetchAccountsAndCards(context: context)
             var entities: [QuickAddAccountEntity] = []
-            var seen = Set<String>()
+            var seenIDs = Set<String>()
 
             for account in result.accounts {
                 let name = account.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !name.isEmpty, seen.insert(name).inserted else { continue }
+                let id = account.id.uuidString
+                guard !name.isEmpty, seenIDs.insert(id).inserted else { continue }
                 entities.append(
                     QuickAddAccountEntity(
-                        id: account.id.uuidString,
+                        id: id,
                         name: name,
+                        type: account.type.rawValue,
                         currencyCode: account.currencyCode,
                         isCreditCard: false
                     )
@@ -260,14 +274,16 @@ struct QuickAddAccountQuery: EntityQuery, EntityStringQuery, Sendable {
 
             for card in result.cards where card.cardType == .credit {
                 let name = QuickAddTransactionSupport.cardLabels(for: card).first ?? card.bankName
-                guard !name.isEmpty, seen.insert(name).inserted else { continue }
+                let id = "card:\(card.id.uuidString)"
+                guard !name.isEmpty, seenIDs.insert(id).inserted else { continue }
                 let currency = result.accounts.first {
                     $0.id == card.accountID
                 }?.currencyCode ?? "CNY"
                 entities.append(
                     QuickAddAccountEntity(
-                        id: "card:\(card.id.uuidString)",
+                        id: id,
                         name: name,
+                        type: card.cardType.rawValue,
                         currencyCode: currency,
                         isCreditCard: true
                     )
@@ -496,6 +512,36 @@ enum QuickAddTransactionSupport {
     }
 
 
+    static func normalizedAccountName(
+        _ value: String
+    ) -> String {
+
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .replacingOccurrences(of: "•", with: "")
+            .lowercased()
+    }
+
+
+    static func cardMatchesAccountName(
+        _ card: BankCard,
+        requestedName: String
+    ) -> Bool {
+
+        let candidates = cardLabels(for: card) + [
+            card.bankName,
+            "\(card.bankName)\(card.cardType.rawValue)",
+            "\(card.bankName) \(card.cardType.rawValue)",
+            card.lastFourDigits
+        ]
+        let requested = normalizedAccountName(requestedName)
+        return candidates.contains {
+            normalizedAccountName($0) == requested
+        }
+    }
+
+
     @MainActor
     static func accountChoices(
         context: ModelContext
@@ -549,26 +595,26 @@ enum QuickAddTransactionSupport {
             throw QuickAddTransactionError.accountNotFound(account.name)
         }
 
-        let normalizedRequestedName = requestedName.lowercased()
+        let normalizedRequestedName = normalizedAccountName(requestedName)
         let selectedAccount: Account?
         let selectedCard: BankCard?
 
         if let accountID = UUID(uuidString: account.id) {
             selectedAccount = accounts.first { $0.id == accountID }
-            selectedCard = nil
+            selectedCard = cards.first {
+                $0.id == accountID && $0.cardType == .credit
+            }
         } else if account.id.hasPrefix("card:"),
                   let cardID = UUID(uuidString: String(account.id.dropFirst("card:".count))) {
             selectedAccount = nil
             selectedCard = cards.first { $0.id == cardID && $0.cardType == .credit }
         } else {
             selectedAccount = accounts.first {
-                $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedRequestedName
+                normalizedAccountName($0.name) == normalizedRequestedName
             }
-            selectedCard = cards.first { card in
-                guard card.cardType == .credit else { return false }
-                return cardLabels(for: card).contains {
-                    $0.lowercased() == normalizedRequestedName
-                }
+            selectedCard = cards.first {
+                $0.cardType == .credit &&
+                cardMatchesAccountName($0, requestedName: requestedName)
             }
         }
 
@@ -692,10 +738,10 @@ struct QuickAddTransactionIntent: AppIntent {
     static let openAppWhenRun = false
 
     @Parameter(title: "金额")
-    var amount: Double
+    var amount: Double?
 
     @Parameter(title: "货币")
-    var currency: QuickAddCurrency
+    var currency: QuickAddCurrency?
 
     @Parameter(title: "类型")
     var type: QuickAddTransactionType?
@@ -714,9 +760,15 @@ struct QuickAddTransactionIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<String> {
 
+        // 金额应由快捷指令前置 OCR 传入；缺失时直接返回错误，避免
+        // App Intent 再弹出一个文本/数字输入框，破坏截图记账流程。
+        guard let amount else {
+            throw QuickAddTransactionError.amountMissing
+        }
+
         let message = try await QuickAddTransactionSupport.save(
             amount: amount,
-            currency: currency,
+            currency: currency ?? .cny,
             type: type,
             category: category,
             account: account,
