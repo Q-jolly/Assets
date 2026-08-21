@@ -256,7 +256,7 @@ enum QuickAddTransactionSupport {
 
         let selectedCard = cards.first { card in
             guard card.cardType == .credit else { return false }
-            cardLabels(for: card).contains {
+            return cardLabels(for: card).contains {
                 $0.lowercased() == normalizedRequestedName
             }
         }
