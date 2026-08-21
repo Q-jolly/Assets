@@ -1288,6 +1288,15 @@ struct FlippableBankCardView: View {
     private var cardFront:
         some View {
 
+        if usesLandscapeWalletFrame,
+           let customFaceImage {
+
+            walletUploadedFace(
+                customFaceImage
+            )
+
+        } else {
+
         ZStack {
 
             cardFrontBackground
@@ -1519,6 +1528,63 @@ struct FlippableBankCardView: View {
             radius: 14,
             y: 8
         )
+        }
+    }
+
+
+    private func walletUploadedFace(
+        _ image:
+            UIImage
+    ) -> some View {
+
+        GeometryReader {
+            geometry in
+
+            ZStack {
+
+                let isPortrait =
+                    image.size.height >
+                    image.size.width
+
+                CardThemeBackground(
+                    theme:
+                        card.theme
+                )
+
+                Image(
+                    uiImage:
+                        image
+                )
+                .resizable()
+                .scaledToFit()
+                // 先按横向卡体交换宽高，再旋转 90°，
+                // 这样原图完整保留，只改变展示方向。
+                .frame(
+                    width:
+                        isPortrait
+                        ? geometry.size.height
+                        : geometry.size.width,
+                    height:
+                        isPortrait
+                        ? geometry.size.width
+                        : geometry.size.height
+                )
+                .rotationEffect(
+                    .degrees(
+                        isPortrait
+                        ? 90
+                        : 0
+                    )
+                )
+                .position(
+                    x:
+                        geometry.size.width / 2,
+                    y:
+                        geometry.size.height / 2
+                )
+            }
+            .clipped()
+        }
     }
 
 
@@ -1612,6 +1678,14 @@ struct FlippableBankCardView: View {
 
         if let customBackFaceImage {
 
+            if usesLandscapeWalletFrame {
+
+                walletUploadedFace(
+                    customBackFaceImage
+                )
+
+            } else {
+
             ZStack {
 
                 CardThemeBackground(
@@ -1652,6 +1726,7 @@ struct FlippableBankCardView: View {
                 y:
                     8
             )
+            }
 
         } else {
 
