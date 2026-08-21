@@ -223,7 +223,7 @@ struct QuickAddAccountEntity: AppEntity, Hashable, Sendable {
 
 
     var displayRepresentation: DisplayRepresentation {
-        DisplayRepresentation(title: name)
+        DisplayRepresentation(title: "\(name)")
     }
 }
 
