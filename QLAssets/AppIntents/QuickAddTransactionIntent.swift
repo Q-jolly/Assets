@@ -147,11 +147,11 @@ enum QuickAddTransactionSupport {
 
     static func makeContainer() throws -> ModelContainer {
 
-        try ModelContainer(for: [
-            Account.self,
+        try ModelContainer(
+            for: Account.self,
             TransactionRecord.self,
             BankCard.self
-        ])
+        )
     }
 
 
