@@ -1285,6 +1285,7 @@ struct FlippableBankCardView: View {
 
     // MARK: 正面
 
+    @ViewBuilder
     private var cardFront:
         some View {
 
